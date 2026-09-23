@@ -14,15 +14,15 @@
 | 0x1007 | level_shift | GET | ? | Error 01 |
 | 0x1008 | set_sub_mode | SET | `[0/1]` → ack | **In App** (bass boost: 0=off, 1=on) |
 | 0x1009 | sub_mode | GET | - → `[0/1]` | **In App** (bass boost: 0=off, 1=on) |
-| 0x100A | set_stage_frequency | SET | `[stage, freq_hi, freq_lo]` → ack | **Probed** |
+| 0x100A | set_stage_frequency | SET | `[stage, freq_hi, freq_lo]` → ack | **Live write/readback** |
 | 0x100B | stage_frequency | GET | `[stage]` → `[stage, freq_hi, freq_lo]` | **Probed** |
-| 0x100C | set_stage_q | SET | `[stage, q_hi, q_lo]` → ack | Untested (likely same pattern) |
+| 0x100C | set_stage_q | SET | `[stage, q_hi, q_lo]` → ack | **Live write/readback** |
 | 0x100D | stage_q | GET | `[stage]` → `[stage, q_hi, q_lo]` | **Probed** |
-| 0x100E | set_stage_filter_type | SET | `[stage, type]` → ack | Untested (likely same pattern) |
+| 0x100E | set_stage_filter_type | SET | `[stage, type]` → ack | **Live write/readback** |
 | 0x100F | stage_filter_type | GET | `[stage]` → `[stage, type]` or `[]` | **Probed** |
-| 0x1010 | set_stage_gain | SET | `[stage, gain_hi, gain_lo]` → ack | Untested (likely same pattern) |
+| 0x1010 | set_stage_gain | SET | `[stage, gain_hi, gain_lo]` → ack | **Live write/readback** |
 | 0x1011 | stage_gain | GET | `[stage]` → `[stage, gain_hi, gain_lo]` | **Probed** |
-| 0x1012 | set_pre_gain | SET | `[gain_hi, gain_lo]` → ack | **Probed** |
+| 0x1012 | set_pre_gain | SET | `[gain_hi, gain_lo]` → ack | **Live write/readback** |
 | 0x1013 | pre_gain | GET | - → `[gain_hi, gain_lo]` | **Probed** |
 | 0x1014 | device_headroom | GET | - → `[headroom_hi, headroom_lo]` | **Probed** |
 
@@ -34,13 +34,10 @@
 - **EQ notification** (0x1082): receives all 5 band gains when changed externally
 - **EQ presets**: Neutral, Rock, Pop, Dance, Hip-Hop, Classical, Movie, Jazz with hard-coded gains
 - **Audio mode** (0x0803/0x0804): genericAudio feature — used for podcast mode toggle (mode=2), but actually controls all audio modes (0-5)
-- **Crossfeed** (0x0E01/0x0E02): low/high/off (separate feature, not userEq)
+- **5-stage parametric EQ** (0x100A-0x1013): frequency, Q, gain, filter type, and pre-gain
+- **Crossfeed** (0x2E00/0x2E01): 0=low, 1=high, 2=off (separate feature, not userEq)
 
-### Defined in GAIAProtocol.swift but not fully used
-- `cmdSetEQBand` (0x1001), `cmdGetEQ` (0x1002), `cmdSetBassBoost` (0x1008), `cmdGetBassBoost` (0x1009)
-- Notification IDs: `notifEQ` (0x1082), `respEQBand` (0x1101), `notifBassBoost` (0x1089/0x1088)
-
-## What We Know but Haven't Implemented
+## Protocol Details
 
 ### Configuration (0x1000)
 Response: `05 C4 3C 00 00`
@@ -111,8 +108,8 @@ Read-only. Response: `00 1E` = 30 → 3.0 dB headroom.
 | 5 | hearingEnhancement |
 
 **Audio mode is managed via genericAudio feature (feature 4, base 0x0800):**
-- SET: `0x0803` (set_audio_mode) — payload `[mode_byte]`
-- GET: `0x0804` (audio_mode) — response `[mode_byte]`
+- SET: `0x0803` (set_audio_mode) — payload `[0x00, mode_byte]`
+- GET: `0x0804` (audio_mode) — response `[0x00, mode_byte]`
 - Notification: `0x0884` (audio_mode GET | 0x0080)
 
 These are the **same commands** already used for "podcast mode" — podcast is just mode value 2.
@@ -135,8 +132,9 @@ NotificationHandler classes confirmed in Blutter output for all items marked "co
 | EQ Single Band ACK | 0x1101 | `[band, gain]` | **In App** (ignored) |
 | Bass Boost | 0x1089 | `[0/1]` | **In App** |
 | Bass Boost Alt | 0x1088 | `[0/1]` | **In App** |
-| Stage Frequency | 0x108B | `[stage, freq_hi, freq_lo]` | Confirmed |
-| Stage Q | 0x108D | `[stage, q_hi, q_lo]` | Confirmed |
-| Stage Filter Type | 0x108F | `[stage, type]` | Confirmed |
-| Stage Gain | 0x1091 | `[stage, gain_hi, gain_lo]` | Confirmed |
-| Audio Mode | 0x0884 | `[mode_byte]` | Confirmed (genericAudio feature) |
+| Stage Frequency | 0x108B | 1–5 concatenated `[stage, freq_hi, freq_lo]` entries | Live observed |
+| Stage Q | 0x108D | 1–5 concatenated `[stage, q_hi, q_lo]` entries | Live observed |
+| Stage Filter Type | 0x108F | 1–5 concatenated `[stage, type]` entries | Live observed |
+| Stage Gain | 0x1091 | 1–5 concatenated `[stage, gain_hi, gain_lo]` entries | Live observed |
+| Pre-Gain | 0x1093 | `[gain_hi, gain_lo]` | Live observed |
+| Audio Mode | 0x0884 | `[0x00, mode_byte]` | Live observed (genericAudio feature) |
