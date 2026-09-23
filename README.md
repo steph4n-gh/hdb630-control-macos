@@ -7,6 +7,7 @@ Native macOS menu bar app to control Sennheiser HDB 630 headphones and the BTD 7
   <img src="screenshots/screenshot_dongle.png" width="260" alt="BTD 700 controls">
   <img src="screenshots/screenshot_popover_peq.png" width="260" alt="Parametric EQ controls">
   <img src="screenshots/screenshot_settings.png" width="260" alt="Headphone settings">
+  <img src="screenshots/screenshot_app_settings.jpg" width="360" alt="App settings with launch at login enabled">
 </p>
 
 ## How it works
@@ -35,6 +36,8 @@ xcodegen && open HDB630Control.xcodeproj
 
 Build and run. The app appears as a headphones icon in the menu bar.
 
+For everyday use, copy `HDB630Control.app` to `/Applications` or `~/Applications` and launch that copy. Click the gear beside the Headphones and BTD 700 tabs, then enable **Launch at login**. The setting uses macOS's native login-item service and is available even when neither device is connected. If macOS requires approval, the app shows a link to Login Items. Replace the installed app with each new build so automatic launch uses the latest version.
+
 The **Headphones** tab requires pairing the HDB 630 directly to the Mac in System Settings > Bluetooth. This control connection can coexist with BTD 700 audio, but it occupies the headphones' second multipoint slot. The **BTD 700** tab works whenever the dongle is plugged into the Mac, even if the headphones are not paired to the Mac.
 
 If the headphones are already connected to both the dongle and a phone, disconnect the phone before pairing the Mac. Pairing a third active Bluetooth device may displace the dongle and interrupt audio. Once the Mac is connected, the app can open its control channel without taking another slot.
@@ -45,7 +48,7 @@ xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuratio
   $(xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuration Debug -showBuildSettings | grep -m1 BUILT_PRODUCTS_DIR | awk '{print $3}')/screenshot_mock screenshots
 ```
 
-The BTD 700 screenshot shows a connected dongle running firmware 3.11.0.
+The BTD 700 screenshot shows a connected dongle running firmware 3.11.0. The app-settings screenshot was captured from the installed app with Launch at login enabled.
 
 ## Project Structure
 

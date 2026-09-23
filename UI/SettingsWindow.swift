@@ -1,4 +1,76 @@
 import SwiftUI
+import ServiceManagement
+
+struct AppSettingsView: View {
+    @State private var loginStatus = SMAppService.mainApp.status
+    @State private var loginError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            CardSection("App settings") {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { loginStatus == .enabled || loginStatus == .requiresApproval },
+                    set: setLaunchAtLogin
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+                Text(loginStatus == .enabled
+                     ? "HDB 630 Control will open when you sign in to your Mac."
+                     : "Keep headphone and dongle controls ready in your menu bar.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                if loginStatus == .requiresApproval {
+                    Text("Allow HDB 630 Control in macOS Login Items to finish enabling automatic launch.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                }
+                if let loginError {
+                    Text(loginError)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                }
+
+                Button("Open Login Items…") {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+                .buttonStyle(.borderless)
+            }
+
+            HStack {
+                Text("HDB 630 Control · \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development")")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                QuitButton()
+            }
+        }
+        .padding(16)
+        .frame(width: 360, alignment: .topLeading)
+        .background(ControlStyle.background)
+        .preferredColorScheme(.dark)
+        .tint(ControlStyle.accent)
+        .onAppear { loginStatus = SMAppService.mainApp.status }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            loginStatus = SMAppService.mainApp.status
+        }
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        loginError = nil
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            loginError = "Could not change automatic launch: \(error.localizedDescription)"
+        }
+        loginStatus = SMAppService.mainApp.status
+    }
+}
 
 struct SettingsView: View {
     @ObservedObject var controller: HeadphoneController

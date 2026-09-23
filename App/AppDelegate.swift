@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let bluetooth = BluetoothManager()
@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Popover
         popover = NSPopover()
         popover.behavior = .transient
+        popover.delegate = self
         let hostingController = NSHostingController(rootView:
             ControlRootView(controller: controller, bluetooth: bluetooth, dongle: dongle)
         )
@@ -54,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
                 guard let self else { return }
+                self.updatePolling()
                 if state == .connected {
                     let name = self.bluetooth.pairedDevices.first?.name ?? "HDB 630"
                     self.controller.deviceInfo.name = name
@@ -100,6 +102,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.isShown
     }
 
+    func popoverDidClose(_ notification: Notification) {
+        stopPolling()
+    }
+
     private func updatePolling() {
         if needsPolling && bluetooth.state == .connected {
             startPolling()
@@ -127,6 +133,7 @@ private struct ControlRootView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject var dongle: DongleController
     @State private var selectedTab = 0
+    @State private var showAppSettings = false
 
     private var contentHeight: CGFloat {
         if selectedTab == 1 { return dongle.available ? 375 : 150 }
@@ -138,6 +145,18 @@ private struct ControlRootView: View {
             HStack(spacing: 4) {
                 tab("Headphones", icon: "headphones", index: 0)
                 tab("BTD 700", icon: "waveform.path", index: 1)
+                Button {
+                    showAppSettings.toggle()
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .background(showAppSettings ? .white.opacity(0.13) : .clear, in: .rect(cornerRadius: 9))
+                }
+                .buttonStyle(.plain)
+                .help("App settings")
+                .accessibilityLabel("App settings")
+                .accessibilityAddTraits(showAppSettings ? .isSelected : [])
             }
             .padding(4)
             .background(.white.opacity(0.055), in: .rect(cornerRadius: 12))
@@ -145,18 +164,22 @@ private struct ControlRootView: View {
             .padding(.top, 15)
             .padding(.bottom, 2)
 
-            Group {
-                if selectedTab == 0 {
-                    StatusBarView(controller: controller, bluetooth: bluetooth)
-                        .environmentObject(bluetooth)
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        DongleView(dongle: dongle)
+            if showAppSettings {
+                AppSettingsView()
+            } else {
+                Group {
+                    if selectedTab == 0 {
+                        StatusBarView(controller: controller, bluetooth: bluetooth)
                             .environmentObject(bluetooth)
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            DongleView(dongle: dongle)
+                                .environmentObject(bluetooth)
+                        }
                     }
                 }
+                .frame(height: contentHeight, alignment: .top)
             }
-            .frame(height: contentHeight, alignment: .top)
         }
         .frame(width: 360)
         .background {
@@ -173,6 +196,7 @@ private struct ControlRootView: View {
     private func tab(_ title: String, icon: String, index: Int) -> some View {
         Button {
             selectedTab = index
+            showAppSettings = false
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: icon)
@@ -180,12 +204,12 @@ private struct ControlRootView: View {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundStyle(selectedTab == index ? .white : .white.opacity(0.56))
+            .foregroundStyle(selectedTab == index && !showAppSettings ? .white : .white.opacity(0.56))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background(selectedTab == index ? .white.opacity(0.13) : .clear, in: .rect(cornerRadius: 9))
+            .background(selectedTab == index && !showAppSettings ? .white.opacity(0.13) : .clear, in: .rect(cornerRadius: 9))
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(selectedTab == index ? .isSelected : [])
+        .accessibilityAddTraits(selectedTab == index && !showAppSettings ? .isSelected : [])
     }
 }
