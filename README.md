@@ -3,9 +3,10 @@
 Native macOS menu bar app to control Sennheiser HDB 630 headphones and the BTD 700 dongle.
 
 <p>
-  <img src="screenshots/screenshot_popover.png" width="260">
-  <img src="screenshots/screenshot_popover_peq.png" width="260">
-  <img src="screenshots/screenshot_settings.png" width="260">
+  <img src="screenshots/screenshot_popover.png" width="260" alt="Headphone controls">
+  <img src="screenshots/screenshot_dongle.png" width="260" alt="BTD 700 controls">
+  <img src="screenshots/screenshot_popover_peq.png" width="260" alt="Parametric EQ controls">
+  <img src="screenshots/screenshot_settings.png" width="260" alt="Headphone settings">
 </p>
 
 ## How it works
@@ -38,11 +39,13 @@ The **Headphones** tab requires pairing the HDB 630 directly to the Mac in Syste
 
 If the headphones are already connected to both the dongle and a phone, disconnect the phone before pairing the Mac. Pairing a third active Bluetooth device may displace the dongle and interrupt audio. Once the Mac is connected, the app can open its control channel without taking another slot.
 
-To regenerate screenshots with mock data:
+To regenerate the headphone screenshots with mock data:
 ```
 xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuration Debug build && \
   $(xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuration Debug -showBuildSettings | grep -m1 BUILT_PRODUCTS_DIR | awk '{print $3}')/screenshot_mock screenshots
 ```
+
+The BTD 700 screenshot shows a connected dongle running firmware 3.11.0.
 
 ## Project Structure
 
