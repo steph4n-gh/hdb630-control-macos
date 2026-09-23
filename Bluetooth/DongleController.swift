@@ -58,7 +58,7 @@ final class DongleController: ObservableObject {
 
     var connectionDescription: String {
         switch connectionState {
-        case 1: "Disconnected"
+        case 0, 1: "Disconnected"
         case 2: "Connected"
         case 3: "Streaming audio"
         case 4: "Streaming voice"
@@ -67,6 +67,7 @@ final class DongleController: ObservableObject {
     }
 
     var qualityDescription: String {
+        guard connectionState >= 2 else { return "—" }
         let bits = bitDepth == 2 ? "24 bit" : bitDepth == 1 ? "16 bit" : "unknown depth"
         let rate: String
         switch sampleRate {
@@ -79,7 +80,8 @@ final class DongleController: ObservableObject {
     }
 
     var activeCodecDescription: String {
-        Codec.allCases.first(where: { $0 != .automatic && $0.rawValue == activeCodecMask })?.title
+        guard activeCodecMask != 0 else { return "None" }
+        return Codec.allCases.first(where: { $0 != .automatic && $0.rawValue == activeCodecMask })?.title
             ?? String(format: "0x%04X", activeCodecMask)
     }
 

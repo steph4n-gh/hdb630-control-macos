@@ -652,6 +652,10 @@ private struct DeviceListView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
             } else {
+                Text("When using BTD 700 audio, disconnect another paired source before connecting Mac controls. HDB 630 supports two active connections.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
                 ForEach(bluetooth.pairedDevices, id: \.addressString) { device in
                     Button {
                         onSelect(device)

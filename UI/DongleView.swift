@@ -35,8 +35,8 @@ struct DongleView: View {
                     }
                     HStack {
                         Spacer()
-                        Button(dongle.connectionState == 1 ? "Reconnect" : "Disconnect") {
-                            Task { await dongle.setConnected(dongle.connectionState == 1) }
+                        Button(dongle.connectionState <= 1 ? "Reconnect" : "Disconnect") {
+                            Task { await dongle.setConnected(dongle.connectionState <= 1) }
                         }
                         .disabled(dongle.busy)
                     }

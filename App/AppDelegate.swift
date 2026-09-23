@@ -59,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.controller.deviceInfo.name = name
                 } else if state == .disconnected && !self.didAutoConnect && !self.bluetooth.pairedDevices.isEmpty {
                     self.didAutoConnect = true
+                    // A direct Mac connection can evict the BTD 700 when the
+                    // headphones' other multipoint slot is already occupied.
+                    guard !self.dongle.available else { return }
                     if let hdb = self.bluetooth.pairedDevices.first(where: {
                         ($0.name ?? "").localizedCaseInsensitiveContains("HDB") ||
                         ($0.name ?? "").localizedCaseInsensitiveContains("630")

@@ -36,6 +36,8 @@ Build and run. The app appears as a headphones icon in the menu bar.
 
 The **Headphones** tab requires pairing the HDB 630 directly to the Mac in System Settings > Bluetooth. This control connection can coexist with BTD 700 audio, but it occupies the headphones' second multipoint slot. The **BTD 700** tab works whenever the dongle is plugged into the Mac, even if the headphones are not paired to the Mac.
 
+When the BTD 700 is plugged in, the app does not auto-connect to the headphones. If the headphones are already connected to both the dongle and a phone, disconnect the phone first, then select HDB 630 in the Headphones tab. Otherwise macOS may displace the dongle connection and interrupt audio.
+
 To regenerate screenshots with mock data:
 ```
 xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuration Debug build && \
