@@ -1,71 +1,29 @@
-# BTD 700 Bluetooth USB-C Dongle
+# BTD 700 on macOS
 
-## What It Is
-- Sennheiser BTD 700 is a Bluetooth 5.4 USB-C dongle
-- Plugs into Mac/PC/phone USB-C port
-- Appears as a **USB audio device** (class-compliant USB DAC) to the OS
-- Wirelessly streams audio to HDB 630 at up to 24-bit/96kHz
-- Supports: aptX Adaptive, aptX HD, aptX, aptX Voice, SBC, AAC
-- NOT a standard USB Bluetooth HCI adapter — proprietary audio transport only
+The BTD 700 has two independent USB interfaces relevant here:
 
-## How It Relates to the App
+- USB audio carries the Mac's sound to the dongle. The dongle transmits it to the HDB 630 over Bluetooth.
+- A vendor HID interface accepts dongle settings and returns live status. The macOS app uses this interface through IOKit. No custom driver is needed.
 
-### Two Separate Connections
-1. **Audio path**: Mac USB → BTD 700 → (BT wireless) → HDB 630
-   - Just works, no app needed, OS sees it as USB audio output
-2. **Control path**: Mac Bluetooth → (BT Classic SPP) → HDB 630
-   - Our app connects directly to headphones over Bluetooth
-   - Independent of the dongle
+The headphone controls in this project still use a direct Mac-to-headphone Bluetooth Classic RFCOMM connection. The dongle's USB HID interface controls the dongle; it does not relay GAIA commands to the headphones. With dongle audio and Mac headphone control together, the HDB 630's two multipoint slots are occupied.
 
-### Dongle as Airoha Device
-From decompiled code (`p095I3/C0920P.java` line 127-128):
-```java
-if (deviceName.toUpperCase().contains("DONGLE")) {
-    deviceType = DeviceType.DONGLE;
-}
-```
+## HID interface
 
-The BTD 700 is also an **Airoha chipset device**. The Smart Control app can connect
-to it via Bluetooth using the same RACE protocol as the headphones. Known dongle
-operations:
-- Firmware update (FOTA) — battery threshold set to -1 for dongle since no battery
-- Device info query
+The tested BTD 700 enumerates as vendor `0x3542`, product `0x3001`. The relevant HID collection has usage page `0xFFA2`, usage `1`, and 64-byte reports with ID `0x34`.
 
-### No USB Control Path
-The Airoha SDK defines `PROTOCOL_USB` (value 1048576) and `PROTOCOL_CABLE` (65536)
-in `ConnectionProtocol.java`, but these are **not used** for BTD 700 in the Smart
-Control Plus app. The dongle exposes only USB audio, not USB serial/control.
+Host commands use `[0x34, 0xFE, command, payload_length, payload..., zero_padding]`. Replies use `[0x34, 0xFF, command, payload_length, payload..., zero_padding]`. Unsolicited events use marker `0xFC`. The app currently uses commands:
 
-### Can We Configure Headphones Through the Dongle?
-**No.** The dongle is a transparent audio bridge. Control commands go directly to the
-headphones via their own Bluetooth SPP connection. The dongle and headphones are two
-separate Bluetooth devices.
+| ID | Purpose |
+| --- | --- |
+| `0x12` | Firmware version |
+| `0x06` | Connection state |
+| `0x01` / `0x02` | Get / set audio mode |
+| `0x03` | Codec capability mask reported by the dongle |
+| `0x04` | Request codec mask |
+| `0x05` | Active codec |
+| `0x08` | Active bit depth and sample rate |
+| `0x14` | Request connection / disconnection |
 
-## Multipoint & Connection Budget
-HDB 630 supports up to **2 simultaneous connections** and **3 paired devices** (confirmed: cmd 0x1409 returns 0x02, paired list size returns 0x03).
+These identifiers were documented by [btd700ctl](https://github.com/sobalap/btd700ctl). The macOS implementation was tested directly against a plugged-in BTD 700 on firmware 3.11.0. It returned streaming state, Gaming mode, aptX Adaptive, and 24-bit/48-kHz audio. Changing the mode to High Quality and back returned success (`0x00`) and read back correctly. Codec requests returned status `0x01` and left aptX Adaptive active; the app reports that rejection.
 
-Using BTD 700 for audio + this app for control from the **same Mac** takes **both slots**:
-1. **BTD 700** — Bluetooth audio (aptX Adaptive, high quality)
-2. **Mac Bluetooth** — RFCOMM/SPP control (this app)
-
-That leaves **no room** for another device (e.g. phone for calls). To free a slot,
-disconnect the dongle or close this app.
-
-Without the dongle, regular Mac Bluetooth handles both audio and control over a single
-connection, leaving 1 slot free for another device — but you're limited to AAC/SBC codecs.
-
-## macOS App Implications
-
-### Must-Have
-- Connect directly to HDB 630 over Bluetooth SPP for all control features
-- BTD 700 audio "just works" via USB — no special code needed
-
-### Nice-to-Have (optional)
-- Detect if BTD 700 is plugged in (USB device enumeration — check for Sennheiser USB audio device)
-- Show signal path info: "Audio: USB → BTD 700 → aptX Adaptive → HDB 630"
-- Show active codec from headphones' A2DP_STATUS (message ID 1007)
-- SignalPath feature (variant 1) — the app has this for displaying codec/audio path
-
-### Not Needed
-- Direct communication with BTD 700 — dongle firmware updates via macOS Bluetooth
-  would be possible but low priority
+The currently active audio quality is a report from the dongle, not a promise of source or headphone capability. To reach 96 kHz, the Mac's USB output format and the headphones' Hi-Res priority setting must also allow it.

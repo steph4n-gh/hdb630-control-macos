@@ -2,10 +2,12 @@ import Cocoa
 import SwiftUI
 import Combine
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let bluetooth = BluetoothManager()
+    private let dongle = DongleController()
     private var controller: HeadphoneController!
     private var cancellables = Set<AnyCancellable>()
     private var didAutoConnect = false
@@ -27,9 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Popover
         popover = NSPopover()
         popover.behavior = .transient
-        let hostingController = NSHostingController(
-            rootView: StatusBarView(controller: controller, bluetooth: bluetooth)
-                .environmentObject(bluetooth)
+        let hostingController = NSHostingController(rootView:
+            ControlRootView(controller: controller, bluetooth: bluetooth, dongle: dongle)
         )
         hostingController.sizingOptions = .preferredContentSize
         popover.contentViewController = hostingController
@@ -118,5 +119,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
+    }
+}
+
+private struct ControlRootView: View {
+    @ObservedObject var controller: HeadphoneController
+    @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject var dongle: DongleController
+    @State private var selectedTab = 0
+
+    private var height: CGFloat {
+        if selectedTab == 1 { return 420 }
+        return bluetooth.state == .connected ? 700 : 280
+    }
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            StatusBarView(controller: controller, bluetooth: bluetooth)
+                .environmentObject(bluetooth)
+                .tabItem { Label("Headphones", systemImage: "headphones") }
+                .tag(0)
+            DongleView(dongle: dongle)
+                .tabItem { Label("BTD 700", systemImage: "waveform.path") }
+                .tag(1)
+        }
+        .frame(width: 340, height: height)
     }
 }

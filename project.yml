@@ -28,15 +28,18 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
     dependencies:
       - sdk: IOBluetooth.framework
+      - sdk: IOKit.framework
 
   ScreenshotMock:
     type: tool
     platform: macOS
     sources:
       - path: Bluetooth/Models.swift
-      - path: UI
-      - path: ../tools/MockController.swift
-      - path: ../tools/main.swift
+      - path: UI/Components.swift
+      - path: UI/SettingsWindow.swift
+      - path: UI/StatusBarView.swift
+      - path: tools/MockController.swift
+      - path: tools/main.swift
     settings:
       base:
         PRODUCT_NAME: screenshot_mock

@@ -1,7 +1,7 @@
 // Screenshot generator for HDB630Control.
 // Renders the real UI views with mock data via screencapture.
 // Build: xcodegen && xcodebuild -scheme ScreenshotMock -configuration Debug build
-// Usage: ./screenshot_mock [output_dir]   (default: HDB630Control/screenshots/)
+// Usage: ./screenshot_mock [output_dir]   (default: screenshots/)
 
 import AppKit
 import SwiftUI
@@ -49,7 +49,7 @@ func main() {
     if CommandLine.arguments.count > 1 {
         outputDir = CommandLine.arguments[1]
     } else {
-        outputDir = "HDB630Control/screenshots"
+        outputDir = "screenshots"
     }
 
     let app = NSApplication.shared

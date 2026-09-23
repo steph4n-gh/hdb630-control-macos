@@ -70,12 +70,7 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
                    name.localizedCaseInsensitiveContains("630")
         }
 
-        if pairedDevices.isEmpty {
-            BTLog("[BT] No HDB/Sennheiser match, showing all devices")
-            pairedDevices = devices
-        } else {
-            BTLog("[BT] Filtered to %d matching devices", pairedDevices.count)
-        }
+        BTLog("[BT] Filtered to %d matching devices", pairedDevices.count)
 
         state = .disconnected
     }

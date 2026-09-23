@@ -1,6 +1,6 @@
 # HDB 630 macOS Controls
 
-Native macOS menu bar app to control Sennheiser HDB 630 headphones -- because Sennheiser only made a mobile app and forgot desktops exist.
+Native macOS menu bar app to control Sennheiser HDB 630 headphones and the BTD 700 dongle.
 
 <p>
   <img src="screenshots/screenshot_popover.png" width="260">
@@ -10,7 +10,7 @@ Native macOS menu bar app to control Sennheiser HDB 630 headphones -- because Se
 
 ## How it works
 
-Communicates with the headphones over Bluetooth Classic RFCOMM using the GAIA v3 protocol (Qualcomm). Despite the Airoha chipset, HDB 630 speaks GAIA v3 -- discovered through reverse engineering the mobile app and Sennheiser's desktop client.
+Communicates with the headphones over Bluetooth Classic RFCOMM using the GAIA v3 protocol (Qualcomm). Despite the Airoha chipset, HDB 630 speaks GAIA v3 -- discovered through reverse engineering the mobile app and Sennheiser's desktop client. BTD 700 settings use its USB HID control interface directly through macOS IOKit; no extra driver or library is needed.
 
 Connection flow:
 1. SDP discovery to find the GAIA RFCOMM channel
@@ -21,23 +21,25 @@ Connection flow:
 
 ## Building
 
-Requires macOS 13+ and Xcode 15+.
+Requires macOS 14+ and Xcode 15+.
 
 ```
-open HDB630Control/HDB630Control.xcodeproj
+open HDB630Control.xcodeproj
 ```
 
 Or with XcodeGen:
 ```
-cd HDB630Control && xcodegen && open HDB630Control.xcodeproj
+xcodegen && open HDB630Control.xcodeproj
 ```
 
 Build and run. The app appears as a headphones icon in the menu bar.
 
+The **Headphones** tab requires pairing the HDB 630 directly to the Mac in System Settings > Bluetooth. This control connection can coexist with BTD 700 audio, but it occupies the headphones' second multipoint slot. The **BTD 700** tab works whenever the dongle is plugged into the Mac, even if the headphones are not paired to the Mac.
+
 To regenerate screenshots with mock data:
 ```
-xcodebuild -scheme ScreenshotMock -configuration Debug build && \
-  $(xcodebuild -scheme ScreenshotMock -configuration Debug -showBuildSettings | grep -m1 BUILT_PRODUCTS_DIR | awk '{print $3}')/screenshot_mock screenshots
+xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuration Debug build && \
+  $(xcodebuild -project HDB630Control.xcodeproj -scheme ScreenshotMock -configuration Debug -showBuildSettings | grep -m1 BUILT_PRODUCTS_DIR | awk '{print $3}')/screenshot_mock screenshots
 ```
 
 ## Project Structure
@@ -52,10 +54,12 @@ HDB630Control/
     GAIAProtocol.swift         -- GAIA v3 packet builder/parser
     BluetoothManager.swift     -- SDP lookup, RFCOMM I/O
     HeadphoneController.swift  -- Device state + all get/set commands
+    DongleController.swift     -- BTD 700 USB HID control and status
   UI/
     Components.swift           -- Shared UI components (CardSection)
     StatusBarView.swift        -- Main popover (controls, EQ, PEQ)
     SettingsWindow.swift       -- Settings page (call, general, device info)
+    DongleView.swift           -- BTD 700 controls and status
 
 tools/
   MockController.swift         -- Mock stubs for screenshot generation
@@ -96,16 +100,24 @@ docs/                          -- Protocol docs and RE guide
 - Firmware version, serial number
 - Connected devices (multipoint, view-only)
 
+**BTD 700**
+- Live connection state, firmware, active codec, and audio quality
+- High Quality / Gaming mode switching
+- Reconnect and disconnect controls
+- Codec choices when the connected headphones expose more than one option, with rejection errors shown if the dongle declines a request
+
 ## Known Limitations
 
 - Crossfeed, sidetone, auto-pause, on-head detection, smart pause, auto-answer, comfort call, and auto power off don't fire push notifications -- polled every 2 seconds while popover is open
 - BTD 700 USB dongle works for audio but control still goes directly to headphones via separate BT connection
 - Multipoint is intentionally view-only, to not cut own connection
 - Custom EQ presets created in the mobile app show as "Custom" -- headphones only store raw band gains, preset names live in the phone app's local storage
+- The dongle reports only aptX Adaptive as available with the HDB 630 connected on our tested firmware (3.11.0). Other codec requests returned a rejection. The app displays that error instead of claiming the codec changed.
+- Firmware updates and Auracast broadcast configuration remain in Sennheiser Dongle Control.
 
 ## BTD 700 Dongle & Multipoint
 
-The BTD 700 USB-C dongle appears as a standard USB audio device. Audio goes: Mac -> USB -> dongle -> Bluetooth -> headphones. This gives you high-quality codecs (aptX Adaptive) that aren't available over regular macOS Bluetooth.
+The BTD 700 USB-C dongle appears as a standard USB audio device and a vendor HID control interface. Audio goes: Mac -> USB -> dongle -> Bluetooth -> headphones. This gives you high-quality codecs (aptX Adaptive) that aren't available over regular macOS Bluetooth.
 
 Control (this app) connects directly to the headphones via a **separate** Bluetooth Classic connection. So if you want BTD 700 audio + this app from the same Mac, that's **both multipoint slots taken** -- no room for a third device (e.g. phone):
 
@@ -117,3 +129,5 @@ HDB 630 supports up to 2 simultaneous connections and 3 paired devices. Without 
 ## License
 
 MIT
+
+The headphone controller and UI started from [hatemosphere/hdb630-control-macos](https://github.com/hatemosphere/hdb630-control-macos). BTD 700 HID command identifiers and report layout were informed by [sobalap/btd700ctl](https://github.com/sobalap/btd700ctl).
