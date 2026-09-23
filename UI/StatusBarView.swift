@@ -30,8 +30,6 @@ struct StatusBarView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @State private var showSettings = false
 
-    private static let maxHeight: CGFloat = 680
-
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
@@ -52,12 +50,10 @@ struct StatusBarView: View {
                     }
                 }
             }
-            .frame(width: 300)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxHeight: Self.maxHeight)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .tint(.blue)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 }
 
@@ -69,22 +65,21 @@ private struct ConnectedView: View {
     @Binding var showSettings: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 16) {
             // Header
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 Image(systemName: "headphones")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 2) {
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(ControlStyle.accent)
+                    .frame(width: 46, height: 46)
+                    .background(ControlStyle.accent.opacity(0.12), in: .rect(cornerRadius: 14))
+                VStack(alignment: .leading, spacing: 4) {
                     Text(controller.deviceInfo.name.isEmpty ? "HDB 630" : controller.deviceInfo.name)
-                        .font(.headline)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
                     if !controller.deviceInfo.codec.isEmpty {
                         Text(controller.deviceInfo.codec)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(.quaternary, in: Capsule())
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(ControlStyle.accent)
                     }
                 }
                 Spacer()
@@ -93,7 +88,7 @@ private struct ConnectedView: View {
                     chargingStatus: controller.deviceInfo.chargingStatus
                 )
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 2)
 
             // Noise Control
             CardSection("Noise Control") {
@@ -133,16 +128,16 @@ private struct ConnectedView: View {
             }
 
             // Footer
-            HStack {
-                Spacer()
+            HStack(spacing: 15) {
                 Button {
                     showSettings = true
                 } label: {
-                    Image(systemName: "gearshape")
+                    Label("Settings", systemImage: "gearshape")
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.small)
                 .foregroundStyle(.secondary)
+                Spacer()
                 Button("Disconnect") {
                     bluetooth.disconnect()
                 }
@@ -151,7 +146,8 @@ private struct ConnectedView: View {
                 .foregroundStyle(.secondary)
                 QuitButton()
             }
-            .padding(.horizontal, 6)
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 3)
         }
     }
 }
@@ -163,8 +159,8 @@ private struct ANCSection: View {
 
     var body: some View {
         HStack {
-            Text("Active Noise Cancelling")
-                .font(.callout)
+            Text("Noise cancelling")
+                .font(.system(size: 13, weight: .medium))
             Spacer()
             Toggle("", isOn: Binding(
                 get: { controller.ancEnabled },
@@ -172,13 +168,15 @@ private struct ANCSection: View {
             ))
             .toggleStyle(.switch)
             .controlSize(.small)
+            .labelsHidden()
         }
         .tooltip("Reduces ambient noise using built-in microphones")
 
         if controller.ancEnabled {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Anti-Wind")
-                    .font(.callout)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Wind reduction")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
                 Picker("", selection: Binding(
                     get: { controller.ancState.antiWind },
                     set: { val in Task { await controller.setAntiWind(val) } }
@@ -188,12 +186,13 @@ private struct ANCSection: View {
                     Text("Max").tag(1)
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
             }
             .tooltip("Reduces wind noise — Auto adjusts based on conditions")
 
             HStack {
                 Text("Comfort")
-                    .font(.callout)
+                    .font(.system(size: 13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: Binding(
                     get: { controller.ancState.comfort },
@@ -201,12 +200,13 @@ private struct ANCSection: View {
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .labelsHidden()
             }
             .tooltip("Reduced ANC strength for less ear pressure")
 
             HStack {
                 Text("Adaptive ANC")
-                    .font(.callout)
+                    .font(.system(size: 13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: Binding(
                     get: { controller.ancState.adaptive },
@@ -214,6 +214,7 @@ private struct ANCSection: View {
                 ))
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .labelsHidden()
             }
             .tooltip("Automatically adjusts ANC level based on environment")
         }
@@ -226,9 +227,10 @@ private struct EQSection: View {
     @ObservedObject var controller: HeadphoneController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Audio Mode")
-                .font(.callout)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Audio mode")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
             Picker("", selection: Binding(
                 get: { controller.audioMode },
                 set: { mode in Task { await controller.setAudioMode(mode) } }
@@ -238,6 +240,7 @@ private struct EQSection: View {
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
         }
 
         switch controller.audioMode {
@@ -261,9 +264,11 @@ private struct GraphicEQControls: View {
     @ObservedObject var controller: HeadphoneController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack {
             Text("Preset")
-                .font(.callout)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            Spacer()
             Picker("", selection: Binding(
                 get: { controller.eqPreset },
                 set: { preset in
@@ -281,13 +286,15 @@ private struct GraphicEQControls: View {
             }
             .pickerStyle(.menu)
             .labelsHidden()
+            .frame(maxWidth: 150, alignment: .trailing)
         }
 
         EQBandSliders(controller: controller)
+            .padding(.vertical, 3)
 
         HStack {
-            Text("Bass Boost")
-                .font(.callout)
+            Text("Bass boost")
+                .font(.system(size: 13, weight: .medium))
             Spacer()
             Toggle("", isOn: Binding(
                 get: { controller.bassBoostEnabled },
@@ -295,6 +302,7 @@ private struct GraphicEQControls: View {
             ))
             .toggleStyle(.switch)
             .controlSize(.small)
+            .labelsHidden()
         }
         .tooltip("Enhanced low-frequency response")
     }
@@ -509,7 +517,7 @@ private struct EQBandSliders: View {
                         ),
                         range: -6.0...6.0
                     )
-                    .frame(height: 100)
+                    .frame(height: 84)
 
                     Text(Self.bandLabels[band])
                         .font(.system(size: 9))
@@ -554,7 +562,7 @@ private struct VerticalSlider: View {
                 let centerY = height / 2
                 let fillHeight = abs(y - centerY)
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(.blue)
+                    .fill(ControlStyle.accent)
                     .frame(width: 3, height: fillHeight)
                     .offset(y: value >= 0 ? -(centerY) : -(y))
 
@@ -591,10 +599,10 @@ private struct BatteryBadge: View {
     var body: some View {
         HStack(spacing: 2) {
             Image(systemName: batteryIcon)
-                .foregroundStyle(level <= 15 ? .red : .primary)
+                .foregroundStyle(level <= 15 ? .orange : ControlStyle.accent)
             VStack(alignment: .trailing, spacing: 0) {
                 Text("\(level)%")
-                    .font(.caption)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                 if !chargingStatus.label.isEmpty {
                     Text(chargingStatus.label)
@@ -603,6 +611,9 @@ private struct BatteryBadge: View {
                 }
             }
         }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(.white.opacity(0.065), in: Capsule())
     }
 
     private var batteryIcon: String {
@@ -652,7 +663,7 @@ private struct DeviceListView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
             } else {
-                Text("When using BTD 700 audio, disconnect another paired source before connecting Mac controls. HDB 630 supports two active connections.")
+                Text("To use BTD 700 audio and Mac controls together, pair the Mac after freeing a headset connection slot. HDB 630 supports two active connections.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 16)

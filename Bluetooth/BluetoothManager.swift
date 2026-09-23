@@ -27,6 +27,7 @@ private func BTLog(_ format: String, _ args: CVarArg...) {
 final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     @Published var state: ConnectionState = .disconnected
     @Published var pairedDevices: [IOBluetoothDevice] = []
+    private var scanID = UUID()
 
     private var rfcommChannel: IOBluetoothRFCOMMChannel?
     private var receiveBuffer = Data()
@@ -53,26 +54,39 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Device Discovery
 
     func scanForDevices() {
+        let request = UUID()
+        scanID = request
         state = .scanning
         BTLog("[BT] Scanning for paired devices...")
-        guard let devices = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else {
-            BTLog("[BT] ERROR: Cannot access paired devices")
-            state = .error("Cannot access paired devices. Check Bluetooth permission.")
-            return
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            guard let self, self.scanID == request, self.state == .scanning else { return }
+            self.state = .error("Bluetooth discovery timed out. You can still use the BTD 700 tab.")
         }
+        // IOBluetooth can wait for CoreBluetooth initialization. Keep the menu bar UI responsive.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let devices = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else {
+                DispatchQueue.main.async {
+                    BTLog("[BT] ERROR: Cannot access paired devices")
+                    guard let self, self.scanID == request else { return }
+                    self.state = .error("Cannot access paired devices. Check Bluetooth permission.")
+                }
+                return
+            }
 
-        BTLog("[BT] Found %d total paired devices", devices.count)
-
-        pairedDevices = devices.filter { device in
-            let name = device.name ?? ""
-            return name.localizedCaseInsensitiveContains("HDB") ||
-                   name.localizedCaseInsensitiveContains("Sennheiser") ||
-                   name.localizedCaseInsensitiveContains("630")
+            let matching = devices.filter { device in
+                let name = device.name ?? ""
+                return name.localizedCaseInsensitiveContains("HDB") ||
+                       name.localizedCaseInsensitiveContains("Sennheiser") ||
+                       name.localizedCaseInsensitiveContains("630")
+            }
+            DispatchQueue.main.async {
+                guard let self, self.scanID == request else { return }
+                BTLog("[BT] Found %d total paired devices", devices.count)
+                BTLog("[BT] Filtered to %d matching devices", matching.count)
+                self.pairedDevices = matching
+                self.state = .disconnected
+            }
         }
-
-        BTLog("[BT] Filtered to %d matching devices", pairedDevices.count)
-
-        state = .disconnected
     }
 
     // MARK: - SDP Channel Discovery

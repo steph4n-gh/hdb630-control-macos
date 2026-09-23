@@ -59,9 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.controller.deviceInfo.name = name
                 } else if state == .disconnected && !self.didAutoConnect && !self.bluetooth.pairedDevices.isEmpty {
                     self.didAutoConnect = true
-                    // A direct Mac connection can evict the BTD 700 when the
-                    // headphones' other multipoint slot is already occupied.
-                    guard !self.dongle.available else { return }
                     if let hdb = self.bluetooth.pairedDevices.first(where: {
                         ($0.name ?? "").localizedCaseInsensitiveContains("HDB") ||
                         ($0.name ?? "").localizedCaseInsensitiveContains("630")
@@ -131,21 +128,64 @@ private struct ControlRootView: View {
     @ObservedObject var dongle: DongleController
     @State private var selectedTab = 0
 
-    private var height: CGFloat {
-        if selectedTab == 1 { return 420 }
-        return bluetooth.state == .connected ? 700 : 280
+    private var contentHeight: CGFloat {
+        if selectedTab == 1 { return dongle.available ? 375 : 150 }
+        return bluetooth.state == .connected ? 610 : 225
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            StatusBarView(controller: controller, bluetooth: bluetooth)
-                .environmentObject(bluetooth)
-                .tabItem { Label("Headphones", systemImage: "headphones") }
-                .tag(0)
-            DongleView(dongle: dongle)
-                .tabItem { Label("BTD 700", systemImage: "waveform.path") }
-                .tag(1)
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                tab("Headphones", icon: "headphones", index: 0)
+                tab("BTD 700", icon: "waveform.path", index: 1)
+            }
+            .padding(4)
+            .background(.white.opacity(0.055), in: .rect(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            .padding(.top, 15)
+            .padding(.bottom, 2)
+
+            Group {
+                if selectedTab == 0 {
+                    StatusBarView(controller: controller, bluetooth: bluetooth)
+                        .environmentObject(bluetooth)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        DongleView(dongle: dongle)
+                            .environmentObject(bluetooth)
+                    }
+                }
+            }
+            .frame(height: contentHeight, alignment: .top)
         }
-        .frame(width: 340, height: height)
+        .frame(width: 360)
+        .background {
+            LinearGradient(
+                colors: [ControlStyle.background, Color(red: 0.09, green: 0.14, blue: 0.19)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        .preferredColorScheme(.dark)
+        .tint(ControlStyle.accent)
+    }
+
+    private func tab(_ title: String, icon: String, index: Int) -> some View {
+        Button {
+            selectedTab = index
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(selectedTab == index ? .white : .white.opacity(0.56))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background(selectedTab == index ? .white.opacity(0.13) : .clear, in: .rect(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selectedTab == index ? .isSelected : [])
     }
 }

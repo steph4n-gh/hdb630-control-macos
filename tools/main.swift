@@ -59,11 +59,20 @@ func main() {
 
     let controller = HeadphoneController()
     let bluetooth = BluetoothManager()
+    bluetooth.state = .connected
+    controller.deviceInfo.name = "HDB 630"
+    controller.deviceInfo.codec = "aptX Adaptive"
+    controller.batteryLevel = 75
+    controller.ancEnabled = true
+    controller.ancState.adaptive = true
 
     // 1. Popover — Equalizer mode
     let popover = StatusBarView(controller: controller, bluetooth: bluetooth)
         .environmentObject(bluetooth)
-    if renderToPNG(popover, width: 320, filename: "screenshot_popover.png", outputDir: outputDir) {
+        .frame(width: 360, height: 610)
+        .background(ControlStyle.background)
+        .tint(ControlStyle.accent)
+    if renderToPNG(popover, width: 360, filename: "screenshot_popover.png", outputDir: outputDir) {
         print("Wrote \(outputDir)/screenshot_popover.png")
     } else {
         print("ERROR: Failed to render popover")
@@ -83,7 +92,10 @@ func main() {
     controller.audioMode = .parametricEq
     let popoverPEQ = StatusBarView(controller: controller, bluetooth: bluetooth)
         .environmentObject(bluetooth)
-    if renderToPNG(popoverPEQ, width: 320, filename: "screenshot_popover_peq.png", outputDir: outputDir) {
+        .frame(width: 360, height: 610)
+        .background(ControlStyle.background)
+        .tint(ControlStyle.accent)
+    if renderToPNG(popoverPEQ, width: 360, filename: "screenshot_popover_peq.png", outputDir: outputDir) {
         print("Wrote \(outputDir)/screenshot_popover_peq.png")
     } else {
         print("ERROR: Failed to render popover (PEQ)")

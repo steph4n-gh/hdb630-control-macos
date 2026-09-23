@@ -1,5 +1,12 @@
 import SwiftUI
 
+enum ControlStyle {
+    static let accent = Color(red: 0.34, green: 0.88, blue: 0.94)
+    static let background = Color(red: 0.075, green: 0.105, blue: 0.15)
+    static let surface = Color.white.opacity(0.065)
+    static let border = Color.white.opacity(0.09)
+}
+
 struct CardSection<Content: View>: View {
     let header: String?
     let content: Content
@@ -10,21 +17,25 @@ struct CardSection<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 7) {
             if let header {
                 Text(header)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .tracking(1.5)
+                    .foregroundStyle(ControlStyle.accent.opacity(0.8))
                     .textCase(.uppercase)
-                    .padding(.horizontal, 4)
-                    .padding(.bottom, 4)
+                    .padding(.leading, 2)
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 11) {
                 content
             }
-            .padding(10)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 8))
+            .background(ControlStyle.surface, in: .rect(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(ControlStyle.border, lineWidth: 1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
