@@ -113,6 +113,7 @@ final class DongleController: ObservableObject {
     private var device: IOHIDDevice?
     private let reportBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 64)
     private var pending: Pending?
+    private var eventRefreshTask: Task<Void, Never>?
 
     init() {
         reportBuffer.initialize(repeating: 0, count: 64)
@@ -166,8 +167,17 @@ final class DongleController: ObservableObject {
     }
 
     private func receive(_ bytes: [UInt8]) {
-        guard bytes.count >= 4, bytes[0] == 0x34, bytes[1] == 0xFF,
-              let pending, bytes[2] == pending.command else { return }
+        guard bytes.count >= 4, bytes[0] == 0x34 else { return }
+        if bytes[1] == 0xFC {
+            eventRefreshTask?.cancel()
+            eventRefreshTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard !Task.isCancelled else { return }
+                await self?.refresh()
+            }
+            return
+        }
+        guard bytes[1] == 0xFF, let pending, bytes[2] == pending.command else { return }
         self.pending = nil
         let length = Int(bytes[3])
         guard length <= 60, bytes.count >= 4 + length else {
@@ -213,8 +223,9 @@ final class DongleController: ObservableObject {
     func refresh() async {
         if device == nil { connect() }
         guard available else { return }
+        let wasBusy = busy
         busy = true
-        defer { busy = false }
+        defer { busy = wasBusy }
         do {
             let version = try await command(0x12)
             if version.count >= 3 { firmware = "\(version[0]).\(version[1]).\(version[2])" }
@@ -245,14 +256,21 @@ final class DongleController: ObservableObject {
     }
 
     func setAudioMode(_ mode: AudioMode) async {
+        busy = true
+        defer { busy = false }
         do {
             let response = try await command(0x02, payload: [mode.rawValue, transport])
             try checkAck(response)
             await refresh()
+            if audioMode != mode {
+                errorMessage = "The dongle did not switch to \(mode.title)."
+            }
         } catch { errorMessage = error.localizedDescription }
     }
 
     func setCodec(_ codec: Codec) async {
+        busy = true
+        defer { busy = false }
         do {
             let response = try await command(0x04, payload: [UInt8(codec.rawValue & 0xFF), UInt8(codec.rawValue >> 8)])
             try checkAck(response)
@@ -261,10 +279,18 @@ final class DongleController: ObservableObject {
     }
 
     func setConnected(_ connected: Bool) async {
+        busy = true
+        defer { busy = false }
         do {
             let response = try await command(0x14, payload: [connected ? 1 : 0])
             try checkAck(response)
-            await refresh()
+            for attempt in 0...10 {
+                await refresh()
+                if connected ? connectionState >= 2 : connectionState <= 1 { return }
+                if attempt < 10 { try await Task.sleep(nanoseconds: 2_000_000_000) }
+            }
+            errorMessage = connected ? "The headphones did not reconnect within 20 seconds."
+                                     : "The headphones did not disconnect."
         } catch { errorMessage = error.localizedDescription }
     }
 

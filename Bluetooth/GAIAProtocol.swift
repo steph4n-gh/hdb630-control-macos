@@ -135,6 +135,7 @@ enum GAIAProtocol {
     static let notifStageQ: UInt16 = 0x108D
     static let notifStageFilterType: UInt16 = 0x108F
     static let notifStageGain: UInt16 = 0x1091
+    static let notifPreGain: UInt16 = 0x1093
     static let respPreGain: UInt16 = 0x1113
     static let notifSmartPause: UInt16 = 0x088D
     static let notifComfortCall: UInt16 = 0x0895

@@ -9,6 +9,7 @@ final class HeadphoneController: ObservableObject {
 
     @Published var deviceInfo = DeviceInfo()
     @Published var batteryLevel: Int = 0
+    @Published var controlError: String?
     @Published var ancEnabled: Bool = false
     @Published var ancState = ANCState()
     @Published var transparencyLevel: Int = 0
@@ -159,9 +160,9 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setANCEnabled(_ enabled: Bool) async {
-        ancEnabled = enabled
         let payload: [UInt8] = [enabled ? 0x01 : 0x00]
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetANCStatus, payload: payload)
+        _ = await writeSetting(GAIAProtocol.cmdSetANCStatus, payload: payload)
+        await fetchANCStatus()
     }
 
     // MARK: - ANC Mode (anti-wind, comfort, adaptive)
@@ -174,26 +175,30 @@ final class HeadphoneController: ObservableObject {
     private func parseANCMode(_ data: Data) {
         guard data.count >= 6 else { return }
         let bytes = [UInt8](data)
-        // [mode1, state1, mode2, state2, mode3, state3]
-        // mode 1=anti-wind, 2=comfort, 3=adaptive
-        ancState.antiWind = Int(bytes[1])        // 0=off, 1=on, 2=auto
-        ancState.comfort = bytes[3] == 1
-        ancState.adaptive = bytes[5] == 1
+        for index in stride(from: 0, through: 4, by: 2) {
+            switch bytes[index] {
+            case 1: ancState.antiWind = Int(bytes[index + 1]) // 0=off, 1=max, 2=auto
+            case 2: ancState.comfort = bytes[index + 1] == 1
+            case 3: ancState.adaptive = bytes[index + 1] == 1
+            default: break
+            }
+        }
     }
 
     func setAntiWind(_ value: Int) async {
-        ancState.antiWind = value
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetANCMode, payload: [0x01, UInt8(value)])
+        guard (0...2).contains(value) else { return }
+        _ = await writeSetting(GAIAProtocol.cmdSetANCMode, payload: [0x01, UInt8(value)])
+        await fetchANCMode()
     }
 
     func setComfort(_ enabled: Bool) async {
-        ancState.comfort = enabled
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetANCMode, payload: [0x02, enabled ? 0x01 : 0x00])
+        _ = await writeSetting(GAIAProtocol.cmdSetANCMode, payload: [0x02, enabled ? 0x01 : 0x00])
+        await fetchANCMode()
     }
 
     func setAdaptive(_ enabled: Bool) async {
-        ancState.adaptive = enabled
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetANCMode, payload: [0x03, enabled ? 0x01 : 0x00])
+        _ = await writeSetting(GAIAProtocol.cmdSetANCMode, payload: [0x03, enabled ? 0x01 : 0x00])
+        await fetchANCMode()
     }
 
     // MARK: - Transparency
@@ -206,12 +211,14 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setTransparency(_ level: Int) {
+        guard (0...100).contains(level) else { return }
         transparencyDebounce?.cancel()
         let item = DispatchWorkItem { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let payload: [UInt8] = [UInt8(level)]
-                _ = await self.send(vendor: .sennheiser, command: GAIAProtocol.cmdSetTransparency, payload: payload)
+                _ = await self.writeSetting(GAIAProtocol.cmdSetTransparency, payload: payload)
+                await self.fetchTransparency()
             }
         }
         transparencyDebounce = item
@@ -228,12 +235,14 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setSidetone(_ level: Int) {
+        guard (0...4).contains(level) else { return }
         sidetoneDebounce?.cancel()
         let item = DispatchWorkItem { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let payload: [UInt8] = [UInt8(level)]
-                _ = await self.send(vendor: .sennheiser, command: GAIAProtocol.cmdSetSidetone, payload: payload)
+                _ = await self.writeSetting(GAIAProtocol.cmdSetSidetone, payload: payload)
+                await self.fetchSidetone()
             }
         }
         sidetoneDebounce = item
@@ -250,8 +259,8 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setAutoPause(_ enabled: Bool) async {
-        autoPauseEnabled = enabled
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetAutoPause, payload: [enabled ? 0x01 : 0x00])
+        _ = await writeSetting(GAIAProtocol.cmdSetAutoPause, payload: [enabled ? 0x01 : 0x00])
+        await fetchAutoPause()
     }
 
     // MARK: - Codec
@@ -282,9 +291,12 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setOnHeadDetection(_ enabled: Bool) async {
-        onHeadDetectionEnabled = enabled
         let payload: [UInt8] = [enabled ? 0x01 : 0x00]
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetOnHeadDetection, payload: payload)
+        _ = await writeSetting(GAIAProtocol.cmdSetOnHeadDetection, payload: payload)
+        await fetchOnHeadDetection()
+        await fetchSmartPause()
+        await fetchAutoCall()
+        await fetchAutoPowerOff()
     }
 
     // MARK: - Smart Pause
@@ -297,9 +309,9 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setSmartPause(_ enabled: Bool) async {
-        smartPauseEnabled = enabled
         let payload: [UInt8] = [enabled ? 0x01 : 0x00]
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetSmartPause, payload: payload)
+        _ = await writeSetting(GAIAProtocol.cmdSetSmartPause, payload: payload)
+        await fetchSmartPause()
     }
 
     // MARK: - Auto-Answer Calls
@@ -312,9 +324,9 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setAutoCall(_ enabled: Bool) async {
-        autoCallEnabled = enabled
         let payload: [UInt8] = [enabled ? 0x01 : 0x00]
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetAutoCall, payload: payload)
+        _ = await writeSetting(GAIAProtocol.cmdSetAutoCall, payload: payload)
+        await fetchAutoCall()
     }
 
     // MARK: - Comfort Call
@@ -327,9 +339,9 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setComfortCall(_ enabled: Bool) async {
-        comfortCallEnabled = enabled
         let payload: [UInt8] = [enabled ? 0x01 : 0x00]
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetComfortCall, payload: payload)
+        _ = await writeSetting(GAIAProtocol.cmdSetComfortCall, payload: payload)
+        await fetchComfortCall()
     }
 
     // MARK: - Auto Power Off
@@ -343,10 +355,11 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setAutoPowerOff(minutes: Int) async {
-        autoPowerOffMinutes = minutes
+        guard [0, 15, 30, 60].contains(minutes) else { return }
         let seconds = UInt16(minutes * 60)
         let payload: [UInt8] = [0x00, UInt8((seconds >> 8) & 0xFF), UInt8(seconds & 0xFF)]
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetTimer, payload: payload)
+        _ = await writeSetting(GAIAProtocol.cmdSetTimer, payload: payload)
+        await fetchAutoPowerOff()
     }
 
     // MARK: - EQ
@@ -355,10 +368,9 @@ final class HeadphoneController: ObservableObject {
         guard !eqLocked else { return }
         var gains = [Int8](repeating: 0, count: 5)
         for band in 0..<5 {
-            guard let resp = await send(vendor: .sennheiser, command: GAIAProtocol.cmdGetEQ, payload: [UInt8(band)]) else { continue }
-            if resp.payload.count >= 1 {
-                gains[band] = Int8(bitPattern: resp.payload[0])
-            }
+            guard let resp = await send(vendor: .sennheiser, command: GAIAProtocol.cmdGetEQ,
+                                        payload: [UInt8(band)]), let first = resp.payload.first else { return }
+            gains[band] = Int8(bitPattern: first)
         }
         guard !eqLocked else { return }
         eqGains = gains.map { Double($0) / 10.0 }
@@ -367,17 +379,33 @@ final class HeadphoneController: ObservableObject {
 
     /// Call synchronously before the async Task to prevent notification races.
     func lockEQ(preset: EQPreset) {
+        guard preset != .custom else { return }
         eqPreset = preset
         eqGains = preset.gains.map { Double($0) / 10.0 }
         eqLockUntil = Date().addingTimeInterval(5)
     }
 
     func sendEQBands(_ preset: EQPreset) async {
-        for (band, gain) in preset.gains.enumerated() {
-            let payload: [UInt8] = [UInt8(band), UInt8(bitPattern: gain)]
-            _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetEQBand, payload: payload)
+        let gains = preset == .custom ? eqGains : preset.gains.map { Double($0) / 10.0 }
+        await sendEQGains(gains)
+    }
+
+    @discardableResult
+    private func sendEQGains(_ gains: [Double]) async -> Bool {
+        var succeeded = true
+        for (band, gain) in gains.enumerated() {
+            let raw = Int8(clamping: Int(round(gain * 10)))
+            let payload: [UInt8] = [UInt8(band), UInt8(bitPattern: raw)]
+            if !(await writeSetting(GAIAProtocol.cmdSetEQBand, payload: payload)) {
+                succeeded = false
+            }
         }
-        eqLockUntil = Date().addingTimeInterval(1) // brief buffer for in-flight notifications
+        eqLockUntil = succeeded ? Date().addingTimeInterval(1) : .distantPast
+        if !succeeded {
+            controlError = "One or more EQ bands could not be applied."
+            await fetchEQ()
+        }
+        return succeeded
     }
 
     func setEQBand(_ band: Int, gain: Double) {
@@ -390,9 +418,11 @@ final class HeadphoneController: ObservableObject {
         bandDebounceTasks[band] = Task {
             try? await Task.sleep(nanoseconds: 100_000_000) // 100ms debounce
             guard !Task.isCancelled else { return }
-            let raw = Int8(clamping: Int(gain * 10))
-            _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetEQBand, payload: [UInt8(band), UInt8(bitPattern: raw)])
-            eqLockUntil = Date().addingTimeInterval(1)
+            let raw = Int8(clamping: Int(round(gain * 10)))
+            let succeeded = await writeSetting(GAIAProtocol.cmdSetEQBand,
+                                               payload: [UInt8(band), UInt8(bitPattern: raw)])
+            eqLockUntil = succeeded ? Date().addingTimeInterval(1) : .distantPast
+            if !succeeded { await fetchEQ() }
         }
     }
 
@@ -417,8 +447,8 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setBassBoost(_ enabled: Bool) async {
-        bassBoostEnabled = enabled
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetBassBoost, payload: [enabled ? 0x01 : 0x00])
+        _ = await writeSetting(GAIAProtocol.cmdSetBassBoost, payload: [enabled ? 0x01 : 0x00])
+        await fetchBassBoost()
     }
 
     // MARK: - Audio Mode
@@ -435,27 +465,23 @@ final class HeadphoneController: ObservableObject {
 
     func setAudioMode(_ mode: AudioMode) async {
         let prev = audioMode
+        guard await writeSetting(GAIAProtocol.cmdSetAudioMode, payload: [0x00, UInt8(mode.rawValue)]) else {
+            await fetchAudioMode()
+            return
+        }
         audioMode = mode
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetAudioMode, payload: [0x00, UInt8(mode.rawValue)])
 
         switch mode {
         case .userEq where prev != .userEq:
             // Re-apply graphic EQ: gains → bass boost (sound zone apply order)
-            lockEQ(preset: eqPreset)
-            await sendEQBands(eqPreset)
+            eqLockUntil = Date().addingTimeInterval(5)
+            let gainsApplied = await sendEQGains(eqGains)
             await setBassBoost(bassBoostEnabled)
-        case .parametricEq:
-            // Sound zone apply order: stage frequencies → stage gains → stage Qs → stage filter types → pre-gain
-            await applyPEQState()
+            if !gainsApplied { controlError = "One or more EQ bands could not be applied." }
         default:
             break
         }
-    }
-
-    /// Apply full PEQ state in sound zone order (used when switching to PEQ mode).
-    private func applyPEQState() async {
-        // Fetch current device state first (may differ from our local state on first switch)
-        await fetchPEQ()
+        await fetchAudioMode()
     }
 
     // MARK: - Parametric EQ
@@ -511,8 +537,9 @@ final class HeadphoneController: ObservableObject {
         peqStages[stage].frequency = hz
         let raw = UInt16(clamping: hz)
         debouncePEQ(key: "freq\(stage)") {
-            _ = await self.send(vendor: .sennheiser, command: GAIAProtocol.cmdSetStageFrequency,
-                                payload: [UInt8(stage), UInt8(raw >> 8), UInt8(raw & 0xFF)])
+            let succeeded = await self.writeSetting(GAIAProtocol.cmdSetStageFrequency,
+                                                    payload: [UInt8(stage), UInt8(raw >> 8), UInt8(raw & 0xFF)])
+            if !succeeded { await self.fetchPEQ() }
         }
     }
 
@@ -521,8 +548,9 @@ final class HeadphoneController: ObservableObject {
         peqStages[stage].q = q
         let raw = UInt16(clamping: Int(round(q * 4096.0)))
         debouncePEQ(key: "q\(stage)") {
-            _ = await self.send(vendor: .sennheiser, command: GAIAProtocol.cmdSetStageQ,
-                                payload: [UInt8(stage), UInt8(raw >> 8), UInt8(raw & 0xFF)])
+            let succeeded = await self.writeSetting(GAIAProtocol.cmdSetStageQ,
+                                                    payload: [UInt8(stage), UInt8(raw >> 8), UInt8(raw & 0xFF)])
+            if !succeeded { await self.fetchPEQ() }
         }
     }
 
@@ -532,16 +560,18 @@ final class HeadphoneController: ObservableObject {
         let raw = Int16(clamping: Int(round(db * 10.0)))
         let unsigned = UInt16(bitPattern: raw)
         debouncePEQ(key: "gain\(stage)") {
-            _ = await self.send(vendor: .sennheiser, command: GAIAProtocol.cmdSetStageGain,
-                                payload: [UInt8(stage), UInt8(unsigned >> 8), UInt8(unsigned & 0xFF)])
+            let succeeded = await self.writeSetting(GAIAProtocol.cmdSetStageGain,
+                                                    payload: [UInt8(stage), UInt8(unsigned >> 8), UInt8(unsigned & 0xFF)])
+            if !succeeded { await self.fetchPEQ() }
         }
     }
 
     func setPEQFilterType(_ stage: Int, type: PEQFilterType) async {
         guard stage >= 0, stage < 5 else { return }
         peqStages[stage].filterType = type
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetStageFilterType,
-                       payload: [UInt8(stage), UInt8(type.rawValue)])
+        let succeeded = await writeSetting(GAIAProtocol.cmdSetStageFilterType,
+                                           payload: [UInt8(stage), UInt8(type.rawValue)])
+        if !succeeded { await fetchPEQ() }
     }
 
     func setPreGain(_ db: Double) {
@@ -552,8 +582,9 @@ final class HeadphoneController: ObservableObject {
         preGainDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard !Task.isCancelled else { return }
-            _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetPreGain,
-                           payload: [UInt8(unsigned >> 8), UInt8(unsigned & 0xFF)])
+            let succeeded = await writeSetting(GAIAProtocol.cmdSetPreGain,
+                                               payload: [UInt8(unsigned >> 8), UInt8(unsigned & 0xFF)])
+            if !succeeded { await fetchPreGain() }
         }
     }
 
@@ -576,8 +607,9 @@ final class HeadphoneController: ObservableObject {
     }
 
     func setCrossfeed(_ level: Int) async {
-        crossfeedLevel = level
-        _ = await send(vendor: .sennheiser, command: GAIAProtocol.cmdSetCrossfeed, payload: [UInt8(level)])
+        guard (0...2).contains(level) else { return }
+        _ = await writeSetting(GAIAProtocol.cmdSetCrossfeed, payload: [UInt8(level)])
+        await fetchCrossfeed()
     }
 
     // MARK: - Paired Device List
@@ -721,32 +753,36 @@ final class HeadphoneController: ObservableObject {
         case GAIAProtocol.respCrossfeed, GAIAProtocol.notifCrossfeed:
             if response.payload.count >= 1 { crossfeedLevel = Int(response.payload[0]) }
         case GAIAProtocol.notifStageFrequency:
-            if response.payload.count >= 3 {
-                let stage = Int(response.payload[0])
-                guard stage >= 0, stage < 5 else { break }
-                peqStages[stage].frequency = Int(UInt16(response.payload[1]) << 8 | UInt16(response.payload[2]))
+            let bytes = [UInt8](response.payload)
+            for offset in stride(from: 0, to: bytes.count - bytes.count % 3, by: 3) {
+                let stage = Int(bytes[offset])
+                guard stage < 5 else { continue }
+                peqStages[stage].frequency = Int(UInt16(bytes[offset + 1]) << 8 | UInt16(bytes[offset + 2]))
             }
         case GAIAProtocol.notifStageQ:
-            if response.payload.count >= 3 {
-                let stage = Int(response.payload[0])
-                guard stage >= 0, stage < 5 else { break }
-                let raw = UInt16(response.payload[1]) << 8 | UInt16(response.payload[2])
+            let bytes = [UInt8](response.payload)
+            for offset in stride(from: 0, to: bytes.count - bytes.count % 3, by: 3) {
+                let stage = Int(bytes[offset])
+                guard stage < 5 else { continue }
+                let raw = UInt16(bytes[offset + 1]) << 8 | UInt16(bytes[offset + 2])
                 peqStages[stage].q = Double(raw) / 4096.0
             }
         case GAIAProtocol.notifStageGain:
-            if response.payload.count >= 3 {
-                let stage = Int(response.payload[0])
-                guard stage >= 0, stage < 5 else { break }
-                let raw = Int16(bitPattern: UInt16(response.payload[1]) << 8 | UInt16(response.payload[2]))
+            let bytes = [UInt8](response.payload)
+            for offset in stride(from: 0, to: bytes.count - bytes.count % 3, by: 3) {
+                let stage = Int(bytes[offset])
+                guard stage < 5 else { continue }
+                let raw = Int16(bitPattern: UInt16(bytes[offset + 1]) << 8 | UInt16(bytes[offset + 2]))
                 peqStages[stage].gain = Double(raw) / 10.0
             }
         case GAIAProtocol.notifStageFilterType:
-            if response.payload.count >= 2 {
-                let stage = Int(response.payload[0])
-                guard stage >= 0, stage < 5 else { break }
-                peqStages[stage].filterType = PEQFilterType(rawValue: Int(response.payload[1])) ?? .bypass
+            let bytes = [UInt8](response.payload)
+            for offset in stride(from: 0, to: bytes.count - bytes.count % 2, by: 2) {
+                let stage = Int(bytes[offset])
+                guard stage < 5 else { continue }
+                peqStages[stage].filterType = PEQFilterType(rawValue: Int(bytes[offset + 1])) ?? .bypass
             }
-        case GAIAProtocol.respPreGain:
+        case GAIAProtocol.respPreGain, GAIAProtocol.notifPreGain:
             if response.payload.count >= 2 {
                 let raw = Int16(bitPattern: UInt16(response.payload[0]) << 8 | UInt16(response.payload[1]))
                 preGainDB = Double(raw) / 10.0
@@ -757,6 +793,20 @@ final class HeadphoneController: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    @discardableResult
+    private func writeSetting(_ command: UInt16, payload: [UInt8]) async -> Bool {
+        do {
+            _ = try await bluetooth.sendCommand(vendor: GAIAProtocol.vendorSennheiser,
+                                                command: command, payload: payload)
+            controlError = nil
+            return true
+        } catch {
+            controlError = error.localizedDescription
+            NSLog("[HP] Write 0x%04X failed: %@", command, error.localizedDescription)
+            return false
+        }
+    }
 
     private func send(vendor: VendorID, command: UInt16, payload: [UInt8] = []) async -> GAIAProtocol.Response? {
         let vendorValue: UInt16 = (vendor == .qualcomm) ? GAIAProtocol.vendorQualcomm : GAIAProtocol.vendorSennheiser

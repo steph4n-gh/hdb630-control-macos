@@ -134,9 +134,9 @@ struct SettingsView: View {
                         get: { controller.crossfeedLevel },
                         set: { level in Task { await controller.setCrossfeed(level) } }
                     )) {
-                        Text("Off").tag(0)
-                        Text("Low").tag(1)
-                        Text("High").tag(2)
+                        Text("Off").tag(2)
+                        Text("Low").tag(0)
+                        Text("High").tag(1)
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 140)
@@ -197,6 +197,13 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            if let error = controller.controlError {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 6)
             }
 
             // Footer

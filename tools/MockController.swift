@@ -28,6 +28,7 @@ final class HeadphoneController: ObservableObject {
         chargingStatus: .disconnected
     )
     @Published var batteryLevel: Int = 72
+    @Published var controlError: String?
     @Published var ancEnabled: Bool = true
     @Published var ancState = ANCState(antiWind: 2, comfort: false, adaptive: false)
     @Published var transparencyLevel: Int = 45

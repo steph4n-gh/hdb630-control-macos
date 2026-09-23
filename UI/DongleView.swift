@@ -76,6 +76,12 @@ struct DongleView: View {
                         modeButton(.gaming, icon: "gamecontroller")
                     }
 
+                    if dongle.audioMode == .broadcast {
+                        Text("Auracast broadcast is active. Choose a mode above to return to headphone audio.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    }
+
                     if availableCodecs.count > 1 {
                         HStack {
                             Text("Preferred codec")

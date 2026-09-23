@@ -249,30 +249,40 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
         }
 
         let packet = GAIAProtocol.buildPacket(vendor: vendor, command: command, payload: payload)
-        var bytes = [UInt8](packet)
-
-        BTLog("[BT] TX %d bytes: %@", bytes.count, bytes.map { String(format: "%02X", $0) }.joined(separator: " "))
-        let result: IOReturn = channel.writeSync(&bytes, length: UInt16(bytes.count))
-
-        guard result == kIOReturnSuccess else {
-            throw BluetoothError.writeFailed(result)
-        }
-
         let responseCmd = GAIAProtocol.responseCommandId(for: command)
         let key = GAIAProtocol.callbackKey(vendor: vendor, responseCmd: responseCmd)
 
         return try await withCheckedThrowingContinuation { continuation in
             nonisolated(unsafe) var resumed = false
-            queue.async { [weak self] in
-                self?.pendingCallbacks[key] = { response in
+            let registered = queue.sync { () -> Bool in
+                guard pendingCallbacks[key] == nil else { return false }
+                pendingCallbacks[key] = { response in
                     guard !resumed else { return }
                     resumed = true
                     if response.isError {
-                        continuation.resume(throwing: BluetoothError.commandError(response.commandId))
+                        continuation.resume(throwing: BluetoothError.commandError(command))
                     } else {
                         continuation.resume(returning: response)
                     }
                 }
+                return true
+            }
+            guard registered else {
+                continuation.resume(throwing: BluetoothError.commandInFlight(command))
+                return
+            }
+
+            var bytes = [UInt8](packet)
+            BTLog("[BT] TX %d bytes: %@", bytes.count, bytes.map { String(format: "%02X", $0) }.joined(separator: " "))
+            let result = channel.writeSync(&bytes, length: UInt16(bytes.count))
+            if result != kIOReturnSuccess {
+                queue.async { [weak self] in
+                    guard !resumed else { return }
+                    resumed = true
+                    self?.pendingCallbacks.removeValue(forKey: key)
+                    continuation.resume(throwing: BluetoothError.writeFailed(result))
+                }
+                return
             }
             queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
                 guard !resumed else { return }
@@ -344,7 +354,10 @@ extension BluetoothManager: IOBluetoothRFCOMMChannelDelegate {
                   response.vendorId, response.commandId, response.payload.count)
 
             let key = GAIAProtocol.callbackKey(vendor: response.vendorId, responseCmd: response.commandId)
-            if let callback = pendingCallbacks.removeValue(forKey: key) {
+            let errorKey = GAIAProtocol.callbackKey(vendor: response.vendorId,
+                                                    responseCmd: response.commandId & ~UInt16(0x0080))
+            if let callback = pendingCallbacks.removeValue(forKey: key)
+                ?? (response.commandId & 0x0180 == 0x0180 ? pendingCallbacks.removeValue(forKey: errorKey) : nil) {
                 callback(response)
             } else {
                 // Unsolicited notification
@@ -363,13 +376,15 @@ enum BluetoothError: LocalizedError {
     case writeFailed(IOReturn)
     case timeout
     case commandError(UInt16)
+    case commandInFlight(UInt16)
 
     var errorDescription: String? {
         switch self {
         case .notConnected: return "Not connected to headphones"
         case .writeFailed(let code): return "Bluetooth write failed: \(code)"
         case .timeout: return "Command timed out"
-        case .commandError(let cmd): return "Device error for command 0x\(String(format: "%04X", cmd))"
+        case .commandError(let cmd): return "Headphones rejected command 0x\(String(format: "%04X", cmd))"
+        case .commandInFlight(let cmd): return "Command 0x\(String(format: "%04X", cmd)) is already in flight"
         }
     }
 }

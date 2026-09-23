@@ -127,6 +127,13 @@ private struct ConnectedView: View {
                 EQSection(controller: controller)
             }
 
+            if let error = controller.controlError {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 3)
+            }
+
             // Footer
             HStack(spacing: 15) {
                 Button {
