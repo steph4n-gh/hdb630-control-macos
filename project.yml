@@ -34,6 +34,7 @@ targets:
     type: tool
     platform: macOS
     sources:
+      - path: App/AudioOutputSwitcher.swift
       - path: Bluetooth/Models.swift
       - path: UI/Components.swift
       - path: UI/SettingsWindow.swift

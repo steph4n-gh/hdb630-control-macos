@@ -2,11 +2,34 @@ import SwiftUI
 import ServiceManagement
 
 struct AppSettingsView: View {
+    @EnvironmentObject private var outputSwitcher: AudioOutputSwitcher
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            CardSection("Quick audio switch") {
+                HStack {
+                    Label("Speakers ↔ BTD 700", systemImage: "speaker.wave.2")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    Text("⌃⌥S")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(ControlStyle.accent)
+                }
+                Text("Playing through \(outputSwitcher.outputName)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Button("Switch sound output") {
+                    Task { await outputSwitcher.toggle() }
+                }
+                .buttonStyle(.borderless)
+                .disabled(outputSwitcher.switching)
+                if let error = outputSwitcher.shortcutError {
+                    Text(error).font(.system(size: 11)).foregroundStyle(.orange)
+                }
+            }
+
             CardSection("App settings") {
                 Toggle("Launch at login", isOn: Binding(
                     get: { loginStatus == .enabled || loginStatus == .requiresApproval },
@@ -51,7 +74,10 @@ struct AppSettingsView: View {
         .background(ControlStyle.background)
         .preferredColorScheme(.dark)
         .tint(ControlStyle.accent)
-        .onAppear { loginStatus = SMAppService.mainApp.status }
+        .onAppear {
+            loginStatus = SMAppService.mainApp.status
+            outputSwitcher.refresh()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             loginStatus = SMAppService.mainApp.status
         }

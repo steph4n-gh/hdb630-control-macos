@@ -7,6 +7,7 @@ struct HDB630ControlApp: App {
     var body: some Scene {
         Settings {
             AppSettingsView()
+                .environmentObject(appDelegate.outputSwitcher)
         }
     }
 }

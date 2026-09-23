@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var popover: NSPopover!
     private let bluetooth = BluetoothManager()
     private let dongle = DongleController()
+    let outputSwitcher = AudioOutputSwitcher()
     private var controller: HeadphoneController!
     private var cancellables = Set<AnyCancellable>()
     private var didAutoConnect = false
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         controller = HeadphoneController(bluetooth: bluetooth)
 
         NSApp.setActivationPolicy(.accessory)
+        outputSwitcher.start()
 
         // Status bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -32,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.delegate = self
         let hostingController = NSHostingController(rootView:
             ControlRootView(controller: controller, bluetooth: bluetooth, dongle: dongle)
+                .environmentObject(outputSwitcher)
         )
         hostingController.sizingOptions = .preferredContentSize
         popover.contentViewController = hostingController
@@ -80,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             self?.bluetooth.disconnect()
         }
 
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !popover.isShown { togglePopover() }
+        return false
     }
 
     @objc private func togglePopover() {

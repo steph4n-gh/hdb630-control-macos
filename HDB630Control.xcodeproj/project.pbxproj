@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A0D100000000000000000001 /* AudioOutputSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D100000000000000000003 /* AudioOutputSwitcher.swift */; };
+		A0D100000000000000000002 /* AudioOutputSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D100000000000000000003 /* AudioOutputSwitcher.swift */; };
 		0601C75202787321FA71540D /* IOBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2812FD6395C926D15DB7CBFE /* IOBluetooth.framework */; };
 		0D0D0D0D0D0D0D0D0D0D0001 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0D0D0D0D0D0D0D0D0D0D0002 /* IOKit.framework */; };
 		0D0D0D0D0D0D0D0D0D0D0003 /* DongleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D0D0D0D0D0D0D0D0D0D0004 /* DongleController.swift */; };
@@ -30,6 +32,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A0D100000000000000000003 /* AudioOutputSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioOutputSwitcher.swift; sourceTree = "<group>"; };
 		2812FD6395C926D15DB7CBFE /* IOBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOBluetooth.framework; path = System/Library/Frameworks/IOBluetooth.framework; sourceTree = SDKROOT; };
 		0D0D0D0D0D0D0D0D0D0D0002 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		0D0D0D0D0D0D0D0D0D0D0004 /* DongleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DongleController.swift; sourceTree = "<group>"; };
@@ -105,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				DF9F40CCE91F32109F3B1CEE /* AppDelegate.swift */,
+				A0D100000000000000000003 /* AudioOutputSwitcher.swift */,
 				6288554D29F37F54ABAD731C /* HDB630ControlApp.swift */,
 			);
 			path = App;
@@ -216,6 +220,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9270F13B96675277C224E7D8 /* Components.swift in Sources */,
+				A0D100000000000000000002 /* AudioOutputSwitcher.swift in Sources */,
 				1589C9582B59B1A926F54A61 /* MockController.swift in Sources */,
 				B20EA258B680EDE4BE606947 /* Models.swift in Sources */,
 				6FF0A96E23F3BD8B40F77C49 /* SettingsWindow.swift in Sources */,
@@ -229,6 +234,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CEC52D738381EABEFFBD18A4 /* AppDelegate.swift in Sources */,
+				A0D100000000000000000001 /* AudioOutputSwitcher.swift in Sources */,
 				802E20CB841C6B52FF041864 /* BluetoothManager.swift in Sources */,
 				0D0D0D0D0D0D0D0D0D0D0003 /* DongleController.swift in Sources */,
 				0D0D0D0D0D0D0D0D0D0D0005 /* DongleView.swift in Sources */,

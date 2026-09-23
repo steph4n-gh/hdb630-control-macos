@@ -2,7 +2,10 @@
 
 Native macOS menu bar app to control Sennheiser HDB 630 headphones and the BTD 700 dongle.
 
+This personal branch adds **Control + Option + S** (`⌃⌥S`) to switch media output between the MacBook speakers and the USB BTD 700 from any app. A brief on-screen message confirms the selected output. If the dongle is unplugged, the shortcut selects the speakers. The app-settings gear also provides a switch button and shows the current output. The shortcut is active while HDB 630 Control is running; enable Launch at login to have it ready after signing in. Microphone selection, per-device volume, and the separate system-alert output are preserved. These personal changes are kept on `personal/audio-output-hotkey`, outside the upstream PR branch.
+
 <p>
+  <img src="screenshots/screenshot_personal_audio_switch.jpg" width="360" alt="Personal audio output switch and Control Option S shortcut">
   <img src="screenshots/screenshot_popover.png" width="260" alt="Headphone controls">
   <img src="screenshots/screenshot_dongle.png" width="260" alt="BTD 700 controls">
   <img src="screenshots/screenshot_popover_peq.png" width="260" alt="Parametric EQ controls">
