@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let bluetooth = BluetoothManager()
@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var pollTimer: Timer?
     private var reconnectTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
+    private var diagnosticsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller = HeadphoneController(bluetooth: bluetooth)
@@ -35,7 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.behavior = .transient
         popover.delegate = self
         let hostingController = NSHostingController(rootView:
-            ControlRootView(controller: controller, bluetooth: bluetooth, dongle: dongle)
+            ControlRootView(controller: controller, bluetooth: bluetooth, dongle: dongle,
+                            openDiagnostics: { [weak self] in self?.showDiagnostics() })
                 .environmentObject(outputSwitcher)
         )
         hostingController.sizingOptions = .preferredContentSize
@@ -167,12 +169,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         pollTimer?.invalidate()
         pollTimer = nil
     }
+
+    private func showDiagnostics() {
+        if let diagnosticsWindow {
+            diagnosticsWindow.makeKeyAndOrderFront(nil)
+        } else {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 860, height: 680),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered, defer: false
+            )
+            window.title = "Signal Lab"
+            window.minSize = NSSize(width: 700, height: 560)
+            window.center()
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            window.contentView = NSHostingView(rootView:
+                DiagnosticsView(controller: controller, bluetooth: bluetooth, dongle: dongle)
+                    .environmentObject(outputSwitcher)
+            )
+            diagnosticsWindow = window
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow, window === diagnosticsWindow else { return }
+        window.contentView = nil
+        diagnosticsWindow = nil
+    }
 }
 
 private struct ControlRootView: View {
     @ObservedObject var controller: HeadphoneController
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject var dongle: DongleController
+    let openDiagnostics: () -> Void
     @State private var selectedTab = 0
     @State private var showAppSettings = false
 
@@ -186,6 +219,14 @@ private struct ControlRootView: View {
             HStack(spacing: 4) {
                 tab("Headphones", icon: "headphones", index: 0)
                 tab("BTD 700", icon: "waveform.path", index: 1)
+                Button(action: openDiagnostics) {
+                    Image(systemName: "chart.xyaxis.line")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .help("Open Signal Lab diagnostics")
+                .accessibilityLabel("Open Signal Lab diagnostics")
                 Button {
                     showAppSettings.toggle()
                 } label: {

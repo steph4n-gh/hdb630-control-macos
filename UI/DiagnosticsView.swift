@@ -1,0 +1,415 @@
+import CoreAudio
+import IOBluetooth
+import SwiftUI
+
+private struct USBOutputSnapshot {
+    var isDefault = false
+    var nominalRate: Double?
+    var actualRate: Double?
+    var bufferFrames: UInt32?
+    var latencyFrames: UInt32?
+    var safetyFrames: UInt32?
+    var isRunning: Bool?
+    var virtualFormat: AudioStreamBasicDescription?
+    var physicalFormat: AudioStreamBasicDescription?
+
+    @MainActor static func read() -> USBOutputSnapshot? {
+        guard let output = try? AudioOutputSwitcher.outputs().first(where: {
+            $0.transport == kAudioDeviceTransportTypeUSB && $0.name == "BTD 700"
+        }) else { return nil }
+
+        var snapshot = USBOutputSnapshot()
+        snapshot.isDefault = (try? AudioOutputSwitcher.defaultOutput()) == output.id
+        snapshot.nominalRate = property(output.id, kAudioDevicePropertyNominalSampleRate)
+        snapshot.actualRate = property(output.id, kAudioDevicePropertyActualSampleRate)
+        snapshot.bufferFrames = property(output.id, kAudioDevicePropertyBufferFrameSize)
+        snapshot.latencyFrames = property(output.id, kAudioDevicePropertyLatency,
+                                          scope: kAudioDevicePropertyScopeOutput)
+        snapshot.safetyFrames = property(output.id, kAudioDevicePropertySafetyOffset,
+                                         scope: kAudioDevicePropertyScopeOutput)
+        if let running: UInt32 = property(output.id, kAudioDevicePropertyDeviceIsRunningSomewhere) {
+            snapshot.isRunning = running != 0
+        }
+
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams,
+                                                 mScope: kAudioDevicePropertyScopeOutput,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        if AudioObjectGetPropertyDataSize(output.id, &address, 0, nil, &size) == noErr,
+           size >= MemoryLayout<AudioStreamID>.size {
+            var streams = [AudioStreamID](repeating: 0, count: Int(size) / MemoryLayout<AudioStreamID>.size)
+            let result = streams.withUnsafeMutableBytes {
+                AudioObjectGetPropertyData(output.id, &address, 0, nil, &size, $0.baseAddress!)
+            }
+            if result == noErr, let stream = streams.first {
+                snapshot.virtualFormat = property(stream, kAudioStreamPropertyVirtualFormat)
+                snapshot.physicalFormat = property(stream, kAudioStreamPropertyPhysicalFormat)
+            }
+        }
+        return snapshot
+    }
+
+    private static func property<T>(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector,
+                                    scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> T? {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        let value = UnsafeMutablePointer<T>.allocate(capacity: 1)
+        defer { value.deallocate() }
+        var size = UInt32(MemoryLayout<T>.size)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, value) == noErr,
+              size == MemoryLayout<T>.size else { return nil }
+        return value.pointee
+    }
+
+    var rate: Double? { actualRate ?? nominalRate }
+
+    var bufferMilliseconds: Double? {
+        guard let bufferFrames, let rate, rate > 0 else { return nil }
+        return Double(bufferFrames) / rate * 1000
+    }
+
+    var latencyMilliseconds: Double? {
+        guard let latencyFrames, let rate, rate > 0 else { return nil }
+        return Double(latencyFrames) / rate * 1000
+    }
+
+    var safetyMilliseconds: Double? {
+        guard let safetyFrames, let rate, rate > 0 else { return nil }
+        return Double(safetyFrames) / rate * 1000
+    }
+}
+
+struct DiagnosticsView: View {
+    @ObservedObject var controller: HeadphoneController
+    @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject var dongle: DongleController
+    @EnvironmentObject private var outputSwitcher: AudioOutputSwitcher
+    @State private var usb: USBOutputSnapshot?
+    @State private var controlRSSI: Int?
+    @State private var rssiHistory: [Int] = []
+    @State private var sampledAt: Date?
+
+    private var headsetConnected: Bool { bluetooth.state == .connected }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                signalPath
+
+                HStack(alignment: .top, spacing: 16) {
+                    controlCard
+                    bluetoothCard
+                }
+
+                HStack(alignment: .top, spacing: 16) {
+                    usbCard
+                    headsetCard
+                }
+
+                sensorCard
+
+                HStack {
+                    Text("Mac metrics: 2 s · device refresh: 10 s / events")
+                    Spacer()
+                    if let sampledAt {
+                        Text("Last sample \(sampledAt.formatted(date: .omitted, time: .standard))")
+                    }
+                }
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.4))
+            }
+            .padding(28)
+            .frame(maxWidth: 1080)
+            .frame(maxWidth: .infinity)
+        }
+        .background {
+            LinearGradient(colors: [Color(red: 0.06, green: 0.10, blue: 0.16),
+                                    Color(red: 0.03, green: 0.06, blue: 0.10)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+        .preferredColorScheme(.dark)
+        .task {
+            var cycle = 0
+            while !Task.isCancelled {
+                sample()
+                if cycle % 5 == 0 {
+                    if headsetConnected { await controller.pollState() }
+                    if dongle.available && !dongle.busy { await dongle.refresh() }
+                }
+                cycle += 1
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SIGNAL LAB  /  HDB 630 + BTD 700")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1.6)
+                    .foregroundStyle(ControlStyle.accent)
+                Text("Inside the signal")
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                Text("Real device reports from the Mac, USB dongle, and headphones.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.58))
+            }
+            Spacer()
+            HStack(spacing: 7) {
+                Circle().fill(ControlStyle.accent).frame(width: 7, height: 7)
+                Text("LIVE")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(1)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .background(ControlStyle.accent.opacity(0.12), in: Capsule())
+        }
+    }
+
+    private var signalPath: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionLabel("AUDIO PATH")
+                HStack(spacing: 8) {
+                    hop("laptopcomputer", "MAC", outputSwitcher.outputName.isEmpty ? "Output unknown" : outputSwitcher.outputName)
+                    Image(systemName: "arrow.right").foregroundStyle(ControlStyle.accent.opacity(0.65))
+                    hop("cable.connector", "USB / BTD 700", usb?.rate.map(rateLabel) ?? "No USB audio")
+                    Image(systemName: "arrow.right").foregroundStyle(ControlStyle.accent.opacity(0.65))
+                    hop("waveform", "BLUETOOTH", dongle.connectionState >= 2 ? dongle.activeCodecDescription : "No link")
+                    Image(systemName: "arrow.right").foregroundStyle(ControlStyle.accent.opacity(0.65))
+                    hop("headphones", "HDB 630", headsetConnected ? "Control connected" : "Control offline")
+                }
+                if let usbRate = usb?.rate, let btRate = bluetoothRate, abs(usbRate - btRate) > 1 {
+                    Text("USB reports \(rateLabel(usbRate)); the dongle reports \(rateLabel(btRate)) over Bluetooth. The conversion point is not exposed.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+        }
+    }
+
+    private var controlCard: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionLabel("MAC ↔ HEADPHONES CONTROL LINK")
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(controlRSSI.map { "\($0)" } ?? "—")
+                        .font(.system(size: 41, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(ControlStyle.accent)
+                    Text("dBm")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Spacer()
+                    Text(headsetConnected ? "RFCOMM OPEN" : "OFFLINE")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundStyle(headsetConnected ? ControlStyle.accent : .orange)
+                }
+                RSSITrace(samples: rssiHistory)
+                    .stroke(ControlStyle.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                    .frame(height: 70)
+                    .background(.white.opacity(0.035), in: .rect(cornerRadius: 9))
+                Text("Mac Bluetooth RSSI for the direct control connection. This is not the BTD 700 radio signal.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var bluetoothCard: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 13) {
+                sectionLabel("BTD 700 RADIO LINK")
+                row("State", dongle.available ? dongle.connectionDescription : "Dongle unplugged")
+                row("Codec", dongle.connectionState >= 2 ? dongle.activeCodecDescription : "—")
+                row("Link format", dongle.qualityDescription)
+                row("Transmission", dongle.available ? dongle.audioMode.title : "—")
+                row("Supported codecs", supportedCodecs)
+                row("Firmware", dongle.firmware.isEmpty ? "—" : dongle.firmware)
+                Text("Codec and link format come from the dongle’s USB HID reports. RF packet loss, transmit power and BTD RSSI are not exposed by the verified commands.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var usbCard: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 13) {
+                sectionLabel("MAC → USB AUDIO")
+                row("Output", usb == nil ? "BTD 700 unavailable" : (usb!.isDefault ? "BTD 700 · selected" : "BTD 700 · idle"))
+                row("Device rate", usb?.rate.map(rateLabel) ?? "—")
+                row("USB stream", usb?.physicalFormat.map(formatLabel) ?? "—")
+                row("Core Audio stream", usb?.virtualFormat.map(formatLabel) ?? "—")
+                row("Buffer", frameDuration(usb?.bufferFrames, usb?.bufferMilliseconds))
+                row("Device latency", frameDuration(usb?.latencyFrames, usb?.latencyMilliseconds))
+                row("Safety offset", frameDuration(usb?.safetyFrames, usb?.safetyMilliseconds))
+                row("Device running", usb?.isRunning.map { $0 ? "Yes" : "No" } ?? "—")
+                Text("Buffer and device timing are Core Audio values, not measured end-to-end wireless latency.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.52))
+            }
+        }
+    }
+
+    private var headsetCard: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 13) {
+                sectionLabel("HDB 630 STATE")
+                row("Control", headsetConnected ? "Connected to Mac" : "Unavailable")
+                row("Battery", headsetConnected ? "\(controller.batteryLevel)%" : "—")
+                row("Charging", headsetConnected ? (controller.deviceInfo.chargingStatus.label.isEmpty ? "No" : controller.deviceInfo.chargingStatus.label) : "—")
+                row("Headphone codec", headsetConnected ? (controller.deviceInfo.codec.isEmpty ? "—" : controller.deviceInfo.codec) : "—")
+                row("ANC", headsetConnected ? (controller.ancEnabled ? "On" : "Off") : "—")
+                row("Wind reduction", headsetConnected ? windLabel : "—")
+                row("Adaptive ANC", headsetConnected ? (controller.ancState.adaptive ? "On" : "Off") : "—")
+                row("Audio mode", headsetConnected ? controller.audioMode.label : "—")
+                row("Firmware", headsetConnected && !controller.deviceInfo.firmwareVersion.isEmpty ? controller.deviceInfo.firmwareVersion : "—")
+            }
+        }
+    }
+
+    private var sensorCard: some View {
+        panel {
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    sectionLabel("SENSOR ACCESS")
+                    Text("Wear sensing is real. Raw samples are not exposed.")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    Text("The device capability file marks raw on-head sensor data unsupported. Its control command reports whether detection is enabled, not whether the headphones are currently worn. No verified raw ANC microphone, motion, temperature, or battery-health stream is available.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 9) {
+                    row("Wear detection", headsetConnected ? (controller.onHeadDetectionEnabled ? "Enabled" : "Disabled") : "—")
+                    row("Current wear state", "Unavailable")
+                    row("Raw wear samples", "Unsupported")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var supportedCodecs: String {
+        guard dongle.available else { return "—" }
+        let names = DongleController.Codec.allCases
+            .filter { $0 != .automatic && dongle.supportedCodecMask & $0.rawValue != 0 }
+            .map(\.title)
+        return names.isEmpty ? "None reported" : names.joined(separator: ", ")
+    }
+
+    private var bluetoothRate: Double? {
+        switch dongle.sampleRate {
+        case 1: 44_100
+        case 2: 48_000
+        case 3: 96_000
+        default: nil
+        }
+    }
+
+    private var windLabel: String {
+        switch controller.ancState.antiWind {
+        case 1: "Max"
+        case 2: "Auto"
+        default: "Off"
+        }
+    }
+
+    private func sample() {
+        usb = USBOutputSnapshot.read()
+        if headsetConnected, let device = bluetooth.pairedDevices.first(where: { $0.isConnected() }) {
+            let value = Int(device.rawRSSI())
+            controlRSSI = value == 127 ? nil : value
+            if let controlRSSI {
+                rssiHistory.append(controlRSSI)
+                if rssiHistory.count > 45 { rssiHistory.removeFirst(rssiHistory.count - 45) }
+            }
+        } else {
+            controlRSSI = nil
+            rssiHistory.removeAll()
+        }
+        sampledAt = Date()
+    }
+
+    private func panel<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(.white.opacity(0.055), in: .rect(cornerRadius: 17))
+            .overlay(RoundedRectangle(cornerRadius: 17).strokeBorder(.white.opacity(0.095)))
+    }
+
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .bold, design: .monospaced))
+            .tracking(1.4)
+            .foregroundStyle(ControlStyle.accent.opacity(0.8))
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label).foregroundStyle(.white.opacity(0.52))
+            Spacer(minLength: 8)
+            Text(value)
+                .fontWeight(.medium)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
+        .font(.system(size: 11))
+    }
+
+    private func hop(_ symbol: String, _ title: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 19))
+                .foregroundStyle(ControlStyle.accent)
+            Text(title)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .tracking(0.8)
+            Text(subtitle)
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.58))
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 73, alignment: .leading)
+    }
+
+    private func rateLabel(_ rate: Double) -> String {
+        String(format: "%.1f kHz", rate / 1000)
+    }
+
+    private func formatLabel(_ format: AudioStreamBasicDescription) -> String {
+        "\(rateLabel(format.mSampleRate)) · \(format.mBitsPerChannel) bit · \(format.mChannelsPerFrame) ch"
+    }
+
+    private func frameDuration(_ frames: UInt32?, _ milliseconds: Double?) -> String {
+        guard let frames else { return "—" }
+        guard let milliseconds else { return "\(frames) frames" }
+        return String(format: "%d frames · %.1f ms", frames, milliseconds)
+    }
+}
+
+private struct RSSITrace: Shape {
+    let samples: [Int]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard !samples.isEmpty else { return path }
+        let count = max(samples.count - 1, 1)
+        for (index, sample) in samples.enumerated() {
+            let x = rect.minX + rect.width * CGFloat(index) / CGFloat(count)
+            let normalized = min(max((Double(sample) + 95) / 75, 0), 1)
+            let y = rect.maxY - rect.height * CGFloat(normalized)
+            if index == 0 { path.move(to: CGPoint(x: x, y: y)) }
+            else { path.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        return path
+    }
+}
