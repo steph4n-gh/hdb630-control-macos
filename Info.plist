@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>HDB 630 Control</string>
+	<string>Signal Deck</string>
+	<key>CFBundleDisplayName</key>
+	<string>Signal Deck</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.hdb630.control</string>
 	<key>CFBundleVersion</key>
@@ -19,6 +21,6 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>HDB 630 Control needs Bluetooth to communicate with your Sennheiser headphones.</string>
+	<string>Signal Deck needs Bluetooth to communicate with your Sennheiser headphones.</string>
 </dict>
 </plist>

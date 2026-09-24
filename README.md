@@ -1,10 +1,14 @@
-# HDB 630 macOS Controls
+# Signal Deck
 
-Native macOS menu bar app to control Sennheiser HDB 630 headphones and the BTD 700 dongle.
+A native macOS menu bar app for Sennheiser HDB 630 headphones and the BTD 700 dongle.
 
-This personal branch adds **Control + Option + S** (`⌃⌥S`) to switch media output between the MacBook speakers and the USB BTD 700 from any app. A brief on-screen message confirms the selected output. If the dongle is unplugged, the shortcut selects the speakers. The app-settings gear also provides a switch button and shows the current output. The shortcut is active while HDB 630 Control is running; enable Launch at login to have it ready after signing in. Microphone selection, per-device volume, and the separate system-alert output are preserved. These personal changes are kept on `personal/audio-output-hotkey`, outside the upstream PR branch.
+Maintained independently at [steph4n-gh/signal-deck](https://github.com/steph4n-gh/signal-deck), forked from [hatemosphere/hdb630-control-macos](https://github.com/hatemosphere/hdb630-control-macos).
+
+This personal branch adds **Control + Option + S** (`⌃⌥S`) to switch media output between the MacBook speakers and the USB BTD 700 from any app. A brief on-screen message confirms the selected output. If the dongle is unplugged, the shortcut selects the speakers. The app-settings gear also provides a switch button and shows the current output. The shortcut is active while Signal Deck is running; enable Launch at login to have it ready after signing in. Microphone selection, per-device volume, and the separate system-alert output are preserved. Development lives on `personal/audio-output-hotkey`; this fork is maintained separately from upstream.
 
 Click the chart icon beside the Headphones and BTD 700 tabs to open **Signal Lab**. It shows the Mac-to-dongle USB audio format and timing, the dongle's Bluetooth codec, link format and transport, headphone wear state, and an RSSI history for the separate Mac-to-headphone control connection. See [the telemetry map](docs/07-signal-lab.md) for what each reading means and which raw sensors are unavailable.
+
+**Headphones → Settings → Wireless audio** controls High Resolution directly from the Mac. Applying it restarts the headphones and restores the control connection. Music can then negotiate 24-bit/96 kHz; Video continues to use 48 kHz. [Protocol and validation](docs/09-wireless-resolution.md).
 
 Signal Lab also decodes the headphone streaming statistics (primary RSSI, normalized link quality, codec, lossless flag and bitrate when reported), and shows experimentally mapped usage counters. All 19 vendor records are available as raw values. The [24-statistic investigation](docs/08-statistics.md) records the evidence and unresolved IDs; telemetry stays on your Mac.
 
@@ -138,8 +142,8 @@ The app refreshes headset state after discrete writes and reports rejected comma
 - BTD 700 USB dongle works for audio but control still goes directly to headphones via separate BT connection
 - Multipoint is intentionally view-only, to not cut own connection
 - Custom EQ presets created in the mobile app show as "Custom" -- headphones only store raw band gains, preset names live in the phone app's local storage
-- The dongle reports only aptX Adaptive as available with the HDB 630 connected on our tested firmware (3.11.0). Other codec requests returned a rejection. The app displays that error instead of claiming the codec changed.
-- Wireless 96 kHz also requires Audio Mode Priority → High Resolution on the headphones and a headphone restart, per Sennheiser's HDB 630 manual. We have not verified a safe GAIA command for that setting, so the Mac app shows the real USB and wireless formats and explains this prerequisite instead of claiming Music mode has enabled it. Gaming/Video mode limits the link to 48 kHz.
+- The dongle reports SBC, aptX and aptX Adaptive in High Quality mode; Gaming mode reported only aptX Adaptive in our tests. Codec selection requests can be rejected by firmware; the app displays that error.
+- Wireless 96 kHz requires High Resolution on the headphones. Signal Deck can now read and change it under Headphones → Settings → Wireless audio, verify the write, restart the headphones and reconnect. Gaming/Video mode still uses 48 kHz. Always check the actual link format in Signal Lab.
 - Packet traces use private macOS unified debug logging. The app no longer writes an unbounded `/tmp/hdb630.log` file.
 - Firmware updates and Auracast broadcast configuration remain in Sennheiser Dongle Control.
 

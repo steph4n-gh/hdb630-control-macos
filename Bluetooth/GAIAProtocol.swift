@@ -50,11 +50,15 @@ enum GAIAProtocol {
     static let cmdSetOnHeadDetection: UInt16 = 0x0400
     static let cmdGetOnHeadDetection: UInt16 = 0x0401
     static let cmdGetPhysicalDeviceState: UInt16 = 0x0402 // 1=in case, 2=off head, 3=on head
+    // Compatibility mode is inverted: 0=High Resolution, 1=Standard. Restart to apply.
+    static let cmdSetBluetoothCompatibility: UInt16 = 0x0405
+    static let cmdGetBluetoothCompatibility: UInt16 = 0x0406
 
     static let cmdSetTimer: UInt16 = 0x0600           // payload=[timerID, seconds_BE_16] (timerID 0=auto power off)
     static let cmdGetTimer: UInt16 = 0x0601           // payload=[timerID], response=[timerID, seconds_BE_16]
     static let cmdGetChargingStatus: UInt16 = 0x0602  // 0=disconnected, 1=charging, 2=complete
     static let cmdGetBattery: UInt16 = 0x0603
+    static let cmdReboot: UInt16 = 0x060F           // Normal restart; retains settings and pairings.
 
     static let cmdGetCodec: UInt16 = 0x0800          // response: 0=SBC,1=AAC,2=aptX,5=aptX-HD,8=aptX-Adaptive,10=LC3
     static let cmdGetStreamSampleRate: UInt16 = 0x081A // response: uint32 big-endian Hz; 0=no stream

@@ -274,6 +274,7 @@ struct DiagnosticsView: View {
                 row("Charging", headsetConnected ? (controller.deviceInfo.chargingStatus.label.isEmpty ? "No" : controller.deviceInfo.chargingStatus.label) : "—")
                 row("Headphone codec", headsetConnected ? (controller.deviceInfo.codec.isEmpty ? "—" : controller.deviceInfo.codec) : "—")
                 row("Headphone stream", headsetConnected ? controller.streamSampleRate.map { rateLabel(Double($0)) } ?? "No stream" : "—")
+                row("High Resolution", controller.highResolutionEnabled.map { $0 ? "Enabled" : "Disabled" } ?? "—")
                 row("ANC", headsetConnected ? (controller.ancEnabled ? "On" : "Off") : "—")
                 row("Wind reduction", headsetConnected ? windLabel : "—")
                 row("Adaptive ANC", headsetConnected ? (controller.ancState.adaptive ? "On" : "Off") : "—")
@@ -339,6 +340,7 @@ struct DiagnosticsView: View {
                 sectionLabel("ACCUMULATED USAGE  /  DEVICE COUNTERS")
                 HStack(alignment: .top, spacing: 28) {
                     VStack(spacing: 10) {
+                        row("Startup count", usageValue(0x01))
                         row("Powered-on time", usageDuration(0x02))
                         row("Playback starts", usageValue(0x03))
                         row("Playback time", usageDuration(0x04))

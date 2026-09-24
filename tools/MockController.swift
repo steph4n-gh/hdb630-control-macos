@@ -28,6 +28,8 @@ final class HeadphoneController: ObservableObject {
         chargingStatus: .disconnected
     )
     @Published var batteryLevel: Int = 72
+    @Published var highResolutionEnabled: Bool? = true
+    @Published var changingHighResolution = false
     @Published var controlError: String?
     @Published var ancEnabled: Bool = true
     @Published var ancState = ANCState(antiWind: 2, comfort: false, adaptive: false)
@@ -66,6 +68,7 @@ final class HeadphoneController: ObservableObject {
     @Published var ownDeviceIndex: Int = 0
 
     // No-op stubs for methods called by views
+    func setHighResolution(_ on: Bool) async {}
     func setANCEnabled(_ on: Bool) async {}
     func setNoiseControlMode(_ mode: NoiseControlMode) async {}
     func setAntiWind(_ val: Int) async {}

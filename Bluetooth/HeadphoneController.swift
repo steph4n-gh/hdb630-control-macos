@@ -10,10 +10,12 @@ final class HeadphoneController: ObservableObject {
     @Published var deviceInfo = DeviceInfo()
     @Published var batteryLevel: Int = 0
     @Published var streamSampleRate: Int?
+    @Published private(set) var highResolutionEnabled: Bool?
+    @Published private(set) var changingHighResolution = false
     @Published private(set) var streamingStatistics: HeadphoneStreamingStatistics?
     @Published private(set) var usageStatistics: [GAIAStatistic] = []
     private var fetchingStatistics = false
-    private var statisticsGeneration = 0
+    private var connectionGeneration = 0
     @Published var controlError: String?
     @Published var ancEnabled: Bool = false
     @Published var ancState = ANCState()
@@ -66,10 +68,11 @@ final class HeadphoneController: ObservableObject {
                     Task { await self.fetchAll() }
                 } else {
                     self.streamSampleRate = nil
+                    self.highResolutionEnabled = nil
                     self.physicalDeviceState = nil
                     self.streamingStatistics = nil
                     self.usageStatistics = []
-                    self.statisticsGeneration += 1
+                    self.connectionGeneration += 1
                 }
             }
             .store(in: &cancellables)
@@ -100,10 +103,10 @@ final class HeadphoneController: ObservableObject {
         guard !fetchingStatistics, bluetooth.state == .connected else { return }
         fetchingStatistics = true
         defer { fetchingStatistics = false }
-        let generation = statisticsGeneration
+        let generation = connectionGeneration
         guard let response = await send(vendor: .qualcomm, command: 0x1801, payload: [0, 1, 0]),
               let page = GAIAStatisticsPage(response.payload, category: 1), !page.more,
-              !Task.isCancelled, bluetooth.state == .connected, generation == statisticsGeneration else {
+              !Task.isCancelled, bluetooth.state == .connected, generation == connectionGeneration else {
             streamingStatistics = nil
             return
         }
@@ -115,14 +118,14 @@ final class HeadphoneController: ObservableObject {
         guard !fetchingStatistics, bluetooth.state == .connected else { return }
         fetchingStatistics = true
         defer { fetchingStatistics = false }
-        let generation = statisticsGeneration
+        let generation = connectionGeneration
         var records: [GAIAStatistic] = []
         var last: UInt8 = 0
         for _ in 0..<32 {
-            guard !Task.isCancelled, bluetooth.state == .connected, generation == statisticsGeneration,
+            guard !Task.isCancelled, bluetooth.state == .connected, generation == connectionGeneration,
                   let response = await send(vendor: .qualcomm, command: 0x1801, payload: [1, 0, last]),
                   let page = GAIAStatisticsPage(response.payload, category: 256, after: last),
-                  !Task.isCancelled, bluetooth.state == .connected, generation == statisticsGeneration else {
+                  !Task.isCancelled, bluetooth.state == .connected, generation == connectionGeneration else {
                 usageStatistics = []
                 return
             }
@@ -172,6 +175,7 @@ final class HeadphoneController: ObservableObject {
         async let st: Void = fetchSidetone()
         async let c: Void = fetchCodec()
         async let sr: Void = fetchStreamSampleRate()
+        async let hr: Void = fetchHighResolution()
         async let cs: Void = fetchChargingStatus()
         async let oh: Void = fetchOnHeadDetection()
         async let ph: Void = fetchPhysicalDeviceState()
@@ -187,7 +191,38 @@ final class HeadphoneController: ObservableObject {
         async let am: Void = fetchAudioMode()
         async let ec: Void = fetchEQConfig()
         async let dl: Void = fetchDeviceList()
-        _ = await (s, b, a, m, t, st, c, sr, cs, oh, ph, sp, ac, cc, ap, aup, fw, eq, bb, cf, am, ec, dl)
+        _ = await (s, b, a, m, t, st, c, sr, hr, cs, oh, ph, sp, ac, cc, ap, aup, fw, eq, bb, cf, am, ec, dl)
+    }
+
+    // MARK: - Wireless Resolution
+
+    func fetchHighResolution() async {
+        let generation = connectionGeneration
+        guard let response = await send(vendor: .sennheiser, command: GAIAProtocol.cmdGetBluetoothCompatibility),
+              generation == connectionGeneration, bluetooth.state == .connected else { return }
+        switch Array(response.payload) {
+        case [0]: highResolutionEnabled = true
+        case [1]: highResolutionEnabled = false
+        default: highResolutionEnabled = nil
+        }
+    }
+
+    func setHighResolution(_ enabled: Bool) async {
+        guard !changingHighResolution, highResolutionEnabled != nil,
+              bluetooth.state == .connected else { return }
+        changingHighResolution = true
+        defer { changingHighResolution = false }
+        guard await writeSetting(GAIAProtocol.cmdSetBluetoothCompatibility, payload: [enabled ? 0 : 1]) else { return }
+        await fetchHighResolution()
+        guard highResolutionEnabled == enabled else {
+            controlError = "The headphones did not confirm the resolution setting. Try again."
+            return
+        }
+        do {
+            try await bluetooth.restartAndReconnect()
+        } catch {
+            controlError = "Resolution setting saved. Restart or reconnect the headphones to apply it: \(error.localizedDescription)"
+        }
     }
 
     // MARK: - Serial

@@ -104,8 +104,8 @@ struct DongleView: View {
                         }
                     }
 
-                    if dongle.audioMode == .highQuality && dongle.sampleRate != 3 {
-                        Text("For a 96 kHz wireless link, the headphones also need Audio Mode Priority → High Resolution in Smart Control Plus, followed by a headphone restart. This app cannot yet verify that headphone setting. Check the live link format above.")
+                    if dongle.audioMode == .highQuality && dongle.connectionState >= 2 && dongle.sampleRate != 3 {
+                        Text("For 96 kHz, enable High Resolution under Headphones → Settings → Wireless audio. That action restarts the headphones. The live link format above shows the negotiated rate.")
                             .font(.system(size: 10))
                             .foregroundStyle(.orange)
                             .fixedSize(horizontal: false, vertical: true)

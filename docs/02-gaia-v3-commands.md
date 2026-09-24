@@ -18,6 +18,16 @@ Response cmd = request cmd | 0x0100. Error cmd = request cmd | 0x0180.
 
 Qualcomm vendor `0x001D` also exposes read-only statistics: `0x1800` enumerates category IDs and `0x1801` returns paginated statistic records. On this HDB 630, categories `0x0001` and `0x0100` returned 5 and 19 records respectively. The five streaming fields are mapped from Qualcomm client source; several of the 19 vendor counters are mapped by controlled experiments. See [the complete statistics investigation](08-statistics.md) for the ID table, units and remaining unknowns.
 
+### Wireless resolution and restart
+
+| Command | ID | Payload / response |
+| --- | --- | --- |
+| Get compatibility preference | `0x0406` | `00` = High Resolution, `01` = Standard |
+| Set compatibility preference | `0x0405` | One byte, same inverted mapping; restart required |
+| Normal restart | `0x060F` | No payload; retains settings and pairings |
+
+Verified on HDB 630 3.33.3: `0406=01` accompanied 48 kHz; writing `0405 [00]`, reading it back and performing one `060F` restart restored `081A=00017700` (96 kHz). [Evidence and reconnection behavior](09-wireless-resolution.md).
+
 ### Codec IDs
 
 | ID | Codec |

@@ -1,5 +1,5 @@
 import Foundation
-import IOBluetooth
+@preconcurrency import IOBluetooth
 import Combine
 import os.log
 
@@ -24,6 +24,7 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     private var scanID = UUID()
 
     private var rfcommChannel: IOBluetoothRFCOMMChannel?
+    private var rfcommOpenID = UUID()
     private var receiveBuffer = Data()
 
     private var pendingCallbacks: [String: (GAIAProtocol.Response) -> Void] = [:]
@@ -209,6 +210,8 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     private func openRFCOMM(device: IOBluetoothDevice, channelID: BluetoothRFCOMMChannelID) {
+        let request = UUID()
+        rfcommOpenID = request
         BTLog("[BT] Opening RFCOMM channel %d...", channelID)
         var channel: IOBluetoothRFCOMMChannel?
         let result = device.openRFCOMMChannelAsync(&channel, withChannelID: channelID, delegate: self)
@@ -222,7 +225,7 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
         rfcommChannel = channel
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
-            guard let self, self.state == .connecting else { return }
+            guard let self, self.rfcommOpenID == request, self.state == .connecting else { return }
             BTLog("[BT] Connection timeout")
             self.disconnect()
             self.state = .error("Connection timed out. Try power-cycling headphones.")
@@ -230,6 +233,7 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func disconnect(userInitiated: Bool = false) {
+        rfcommOpenID = UUID()
         if userInitiated { userDisconnected = true }
         BTLog("[BT] Disconnecting...")
         if let channel = rfcommChannel {
@@ -241,6 +245,35 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
         queue.async { self.pendingCallbacks.removeAll() }
         state = .disconnected
         BTLog("[BT] Disconnected")
+    }
+
+    /// Reconnect the same paired device after an explicitly requested settings restart.
+    @MainActor func restartAndReconnect() async throws {
+        guard let device = rfcommChannel?.getDevice(), state == .connected else {
+            throw BluetoothError.notConnected
+        }
+        _ = try await sendCommand(vendor: GAIAProtocol.vendorSennheiser, command: GAIAProtocol.cmdReboot)
+        disconnect()
+        state = .connecting
+        do {
+            try await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !userDisconnected else { throw CancellationError() }
+            // IOBluetooth's synchronous connection can wait for paging. Keep it off the UI thread.
+            let result: IOReturn = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: device.isConnected() ? kIOReturnSuccess : device.openConnection())
+                }
+            }
+            guard !userDisconnected, !Task.isCancelled else { throw CancellationError() }
+            guard result == kIOReturnSuccess, device.isConnected() else {
+                state = .error("Headphones restarted, but the Mac could not reconnect. Connect HDB 630 in Bluetooth settings.")
+                throw BluetoothError.notConnected
+            }
+            connect(to: device)
+        } catch {
+            if state == .connecting { state = .disconnected }
+            throw error
+        }
     }
 
     // MARK: - Send GAIA Command

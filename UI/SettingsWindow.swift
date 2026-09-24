@@ -39,13 +39,13 @@ struct AppSettingsView: View {
                 .controlSize(.small)
 
                 Text(loginStatus == .enabled
-                     ? "HDB 630 Control will open when you sign in to your Mac."
+                     ? "Signal Deck will open when you sign in to your Mac."
                      : "Keep headphone and dongle controls ready in your menu bar.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
 
                 if loginStatus == .requiresApproval {
-                    Text("Allow HDB 630 Control in macOS Login Items to finish enabling automatic launch.")
+                    Text("Allow Signal Deck in macOS Login Items to finish enabling automatic launch.")
                         .font(.system(size: 11))
                         .foregroundStyle(.orange)
                 }
@@ -62,7 +62,7 @@ struct AppSettingsView: View {
             }
 
             HStack {
-                Text("HDB 630 Control · \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development")")
+                Text("Signal Deck · \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Development")")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -120,6 +120,24 @@ struct SettingsView: View {
                 Spacer()
             }
             .padding(.horizontal, 6)
+
+            CardSection("Wireless audio") {
+                SettingRow("High Resolution") {
+                    Text(controller.highResolutionEnabled.map { $0 ? "Enabled" : "Disabled" } ?? "Unavailable")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Allows aptX Adaptive up to 24-bit/96 kHz. Video mode still uses 48 kHz. Changing this setting restarts the headphones and briefly interrupts audio.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(controller.changingHighResolution ? "Restarting headphones…"
+                       : controller.highResolutionEnabled == true ? "Disable & restart headphones" : "Enable & restart headphones") {
+                    Task { await controller.setHighResolution(controller.highResolutionEnabled != true) }
+                }
+                .buttonStyle(.borderless)
+                .disabled(controller.changingHighResolution || controller.highResolutionEnabled == nil)
+            }
 
             // Call section
             CardSection("Call") {

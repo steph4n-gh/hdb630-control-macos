@@ -24,7 +24,7 @@ These are the initial values captured at approximately 23:13 EDT. All numbers ar
 
 | ID | Bytes | Initial value | Meaning / evidence |
 | --- | ---: | ---: | --- |
-| `01` | 2 | 100 | **Likely power-on count**: 100 → 106 after multiple user-confirmed restarts. Exact restart count was not recorded, so this remains provisional; not battery health. |
+| `01` | 2 | 100 | **Startup count**, experimental: 108 → 109 after exactly one acknowledged software restart (`0x060F`). Includes software restarts, not just presses of the power button. |
 | `02` | 4 | 10760 | **Powered-on minutes**, experimental: continues with the audio link disconnected. |
 | `03` | 2 | 477 | **Playback starts**, experimental: 478 → 479 on native AAC playback start. |
 | `04` | 4 | 6359 | **Playback minutes**, experimental: stops with no stream, resumes during AAC; equals sum of `0F`–`13`. |
@@ -56,6 +56,7 @@ The [captured experiment data](statistics-observations.json) contains the raw va
 - **Transparency with Adaptive on:** a request for 100 read back as zero, so this phase is not valid evidence for transparency counters.
 - **Manual transparency:** adaptive mode was disabled and `0x1A03` read back 100, then 50, for separate roughly 85-second intervals. No new vendor counter began advancing. `09` continued at 100% transparency: it tracks the noise-control feature being enabled, not minutes of effective acoustic cancellation. The original 0% balance and adaptive setting were restored.
 - **Restart / reconnection:** after several user-confirmed off/on cycles and Mac re-pairing, `01` rose 100 → 106. This supports a startup counter, but the exact number of restarts was not counted. Playback total `04` stayed 6397, AAC `0F` stayed 282, Adaptive `11` stayed 6111, charging sessions stayed 7, and charging minutes stayed 2634. During a further 90-second no-stream observation, `02` and `09` advanced while playback counters stayed fixed. Streaming records were all empty with no audio stream. The headset also reported wind Auto and Adaptive off after recovery; this interval is not a controlled ANC experiment.
+- **Controlled software restart:** category page before restart reported `01=006C` (108). One acknowledged `0x060F` restart was sent, the Mac reconnected, and `01=006D` (109) was read back. This identifies startup count independently of the earlier uncounted button presses. Other accumulated values persisted.
 - The initial duration identity is exact: `281 + 1 + 6074 + 0 + 3 = 6359`. Repeated samples preserve `0F + 10 + 11 + 12 + 13 = 04`.
 
 Counter changes are batched roughly once a minute. Reading immediately after a setting change is insufficient. These experiments change one setting/path at a time and capture its independent state getter alongside the statistics. Original settings are restored.
