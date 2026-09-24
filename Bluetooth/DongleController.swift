@@ -56,6 +56,8 @@ final class DongleController: ObservableObject {
     @Published private(set) var activeCodecMask: UInt16 = 0
     @Published private(set) var bitDepth: UInt8 = 0
     @Published private(set) var sampleRate: UInt8 = 0
+    @Published private(set) var leAudioState: UInt8?
+    @Published private(set) var sinkTransport: UInt8?
 
     var connectionDescription: String {
         switch connectionState {
@@ -204,6 +206,8 @@ final class DongleController: ObservableObject {
         supportedCodecMask = 0
         bitDepth = 0
         sampleRate = 0
+        leAudioState = nil
+        sinkTransport = nil
         errorMessage = nil
     }
 
@@ -305,6 +309,12 @@ final class DongleController: ObservableObject {
             if quality.count >= 2 {
                 bitDepth = quality[0]
                 sampleRate = quality[1]
+            }
+            if let value = try? await command(0x07), let first = value.first, first <= 4 {
+                leAudioState = first
+            }
+            if let value = try? await command(0x15), let first = value.first, first <= 3 {
+                sinkTransport = first
             }
             errorMessage = nil
         } catch is CancellationError {

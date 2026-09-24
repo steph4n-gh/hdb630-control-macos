@@ -17,6 +17,7 @@ final class HeadphoneController: ObservableObject {
     @Published var sidetoneLevel: Int = 0
     @Published var autoPauseEnabled: Bool = false
     @Published var onHeadDetectionEnabled: Bool = true
+    @Published var physicalDeviceState: UInt8?
     @Published var smartPauseEnabled: Bool = false
     @Published var autoCallEnabled: Bool = false
     @Published var comfortCallEnabled: Bool = false
@@ -61,6 +62,7 @@ final class HeadphoneController: ObservableObject {
                     Task { await self.fetchAll() }
                 } else {
                     self.streamSampleRate = nil
+                    self.physicalDeviceState = nil
                 }
             }
             .store(in: &cancellables)
@@ -76,11 +78,12 @@ final class HeadphoneController: ObservableObject {
         async let st: Void = fetchSidetone()
         async let aup: Void = fetchAutoPause()
         async let oh: Void = fetchOnHeadDetection()
+        async let ph: Void = fetchPhysicalDeviceState()
         async let sp: Void = fetchSmartPause()
         async let ac: Void = fetchAutoCall()
         async let cc: Void = fetchComfortCall()
         async let ap: Void = fetchAutoPowerOff()
-        _ = await (b, eq, cf, st, aup, oh, sp, ac, cc, ap)
+        _ = await (b, eq, cf, st, aup, oh, ph, sp, ac, cc, ap)
     }
 
     // MARK: - Notification Registration
@@ -121,6 +124,7 @@ final class HeadphoneController: ObservableObject {
         async let sr: Void = fetchStreamSampleRate()
         async let cs: Void = fetchChargingStatus()
         async let oh: Void = fetchOnHeadDetection()
+        async let ph: Void = fetchPhysicalDeviceState()
         async let sp: Void = fetchSmartPause()
         async let ac: Void = fetchAutoCall()
         async let cc: Void = fetchComfortCall()
@@ -133,7 +137,7 @@ final class HeadphoneController: ObservableObject {
         async let am: Void = fetchAudioMode()
         async let ec: Void = fetchEQConfig()
         async let dl: Void = fetchDeviceList()
-        _ = await (s, b, a, m, t, st, c, sr, cs, oh, sp, ac, cc, ap, aup, fw, eq, bb, cf, am, ec, dl)
+        _ = await (s, b, a, m, t, st, c, sr, cs, oh, ph, sp, ac, cc, ap, aup, fw, eq, bb, cf, am, ec, dl)
     }
 
     // MARK: - Serial
@@ -323,6 +327,12 @@ final class HeadphoneController: ObservableObject {
         if resp.payload.count >= 1 {
             onHeadDetectionEnabled = resp.payload[0] == 0x01
         }
+    }
+
+    func fetchPhysicalDeviceState() async {
+        guard let resp = await send(vendor: .sennheiser, command: GAIAProtocol.cmdGetPhysicalDeviceState),
+              let first = resp.payload.first else { return }
+        physicalDeviceState = first
     }
 
     func setOnHeadDetection(_ enabled: Bool) async {
@@ -757,6 +767,8 @@ final class HeadphoneController: ObservableObject {
             if response.payload.count >= 1 {
                 deviceInfo.chargingStatus = ChargingStatus(rawValue: Int(response.payload[0])) ?? .disconnected
             }
+        case GAIAProtocol.notifPhysicalDeviceState:
+            physicalDeviceState = response.payload.first
         case GAIAProtocol.notifEQ:
             if !eqLocked, response.payload.count >= 5 {
                 let gains = (0..<5).map { Int8(bitPattern: response.payload[$0]) }

@@ -228,6 +228,8 @@ struct DiagnosticsView: View {
                 row("Codec", dongle.connectionState >= 2 ? dongle.activeCodecDescription : "—")
                 row("Link format", dongle.qualityDescription)
                 row("Transmission", dongle.available ? dongle.audioMode.title : "—")
+                row("Sink transport", dongle.sinkTransport.map(sinkTransportLabel) ?? "—")
+                row("LE Audio", dongle.leAudioState.map(leAudioLabel) ?? "—")
                 row("Supported codecs", supportedCodecs)
                 row("Firmware", dongle.firmware.isEmpty ? "—" : dongle.firmware)
                 Text("Codec and link format come from the dongle’s USB HID reports. RF packet loss, transmit power and BTD RSSI are not exposed by the verified commands.")
@@ -282,7 +284,7 @@ struct DiagnosticsView: View {
                     sectionLabel("SENSOR ACCESS")
                     Text("Wear sensing is real. Raw samples are not exposed.")
                         .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    Text("The device capability file marks raw on-head sensor data unsupported. Its control command reports whether detection is enabled, not whether the headphones are currently worn. No verified raw ANC microphone, motion, temperature, or battery-health stream is available.")
+                    Text("The headphones report an on-head/off-head state, but their capability file marks raw wear sensor samples unsupported. No verified raw ANC microphone, motion, temperature, or battery-health stream is available.")
                         .font(.system(size: 11))
                         .foregroundStyle(.white.opacity(0.58))
                         .fixedSize(horizontal: false, vertical: true)
@@ -290,7 +292,7 @@ struct DiagnosticsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 9) {
                     row("Wear detection", headsetConnected ? (controller.onHeadDetectionEnabled ? "Enabled" : "Disabled") : "—")
-                    row("Current wear state", "Unavailable")
+                    row("Current wear state", headsetConnected ? physicalStateLabel : "—")
                     row("Raw wear samples", "Unsupported")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -304,6 +306,37 @@ struct DiagnosticsView: View {
             .filter { $0 != .automatic && dongle.supportedCodecMask & $0.rawValue != 0 }
             .map(\.title)
         return names.isEmpty ? "None reported" : names.joined(separator: ", ")
+    }
+
+    private var physicalStateLabel: String {
+        switch controller.physicalDeviceState {
+        case 1: "In case"
+        case 2: "Off head"
+        case 3: "On head"
+        case .some(let value): "Unknown (\(value))"
+        case nil: "—"
+        }
+    }
+
+    private func sinkTransportLabel(_ value: UInt8) -> String {
+        switch value {
+        case 0: "Unavailable"
+        case 1: "Classic Bluetooth"
+        case 2: "LE Audio"
+        case 3: "Dual"
+        default: "Unknown (\(value))"
+        }
+    }
+
+    private func leAudioLabel(_ value: UInt8) -> String {
+        switch value {
+        case 0: "None"
+        case 1: "Disconnected"
+        case 2: "Connected"
+        case 3: "Streaming unicast"
+        case 4: "Streaming broadcast"
+        default: "Unknown (\(value))"
+        }
     }
 
     private var bluetoothRate: Double? {

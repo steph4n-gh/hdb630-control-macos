@@ -4,7 +4,7 @@ Native macOS menu bar app to control Sennheiser HDB 630 headphones and the BTD 7
 
 This personal branch adds **Control + Option + S** (`⌃⌥S`) to switch media output between the MacBook speakers and the USB BTD 700 from any app. A brief on-screen message confirms the selected output. If the dongle is unplugged, the shortcut selects the speakers. The app-settings gear also provides a switch button and shows the current output. The shortcut is active while HDB 630 Control is running; enable Launch at login to have it ready after signing in. Microphone selection, per-device volume, and the separate system-alert output are preserved. These personal changes are kept on `personal/audio-output-hotkey`, outside the upstream PR branch.
 
-Click the chart icon beside the Headphones and BTD 700 tabs to open **Signal Lab**. It shows the Mac-to-dongle USB audio format and timing, the dongle's Bluetooth codec and link format, headphone status, and an RSSI history for the separate Mac-to-headphone control connection. See [the telemetry map](docs/07-signal-lab.md) for what each reading means and which raw sensors are unavailable.
+Click the chart icon beside the Headphones and BTD 700 tabs to open **Signal Lab**. It shows the Mac-to-dongle USB audio format and timing, the dongle's Bluetooth codec, link format and transport, headphone wear state, and an RSSI history for the separate Mac-to-headphone control connection. See [the telemetry map](docs/07-signal-lab.md) for what each reading means and which raw sensors are unavailable.
 
 <p>
   <img src="screenshots/screenshot_personal_audio_switch.jpg" width="360" alt="Personal audio output switch and Control Option S shortcut">

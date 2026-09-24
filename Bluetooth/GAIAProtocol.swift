@@ -49,6 +49,7 @@ enum GAIAProtocol {
 
     static let cmdSetOnHeadDetection: UInt16 = 0x0400
     static let cmdGetOnHeadDetection: UInt16 = 0x0401
+    static let cmdGetPhysicalDeviceState: UInt16 = 0x0402 // 1=in case, 2=off head, 3=on head
 
     static let cmdSetTimer: UInt16 = 0x0600           // payload=[timerID, seconds_BE_16] (timerID 0=auto power off)
     static let cmdGetTimer: UInt16 = 0x0601           // payload=[timerID], response=[timerID, seconds_BE_16]
@@ -126,6 +127,7 @@ enum GAIAProtocol {
     static let notifStreamSampleRate: UInt16 = 0x089A
     static let respCodec: UInt16 = 0x0900
     static let notifCharging: UInt16 = 0x0682
+    static let notifPhysicalDeviceState: UInt16 = 0x0482
     static let notifEQ: UInt16 = 0x1082
     static let respEQ: UInt16 = 0x1102
     static let respEQBand: UInt16 = 0x1101

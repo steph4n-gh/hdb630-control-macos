@@ -22,9 +22,13 @@ Host commands use `[0x34, 0xFE, command, payload_length, payload..., zero_paddin
 | `0x04` | Request codec mask |
 | `0x05` | Active codec |
 | `0x08` | Active bit depth and sample rate |
+| `0x07` | LE Audio connection state |
+| `0x15` | Sink transport (Classic, LE Audio, or dual) |
 | `0x14` | Request connection / disconnection |
 
 These identifiers were documented by [btd700ctl](https://github.com/sobalap/btd700ctl). The macOS implementation was tested directly against a plugged-in BTD 700 on firmware 3.11.0. It returned streaming state, Gaming mode, aptX Adaptive, and 24-bit/48-kHz audio. Changing the mode to High Quality and back returned success (`0x00`) and read back correctly. Codec requests returned status `0x01` and left aptX Adaptive active; the app reports that rejection.
+
+The read-only `0x07` and `0x15` status commands returned `01` and `01` with the HDB 630 connected. In btd700ctl's enum mapping, these mean LE Audio disconnected and Classic Bluetooth sink transport. They describe the dongle-to-headphone link, not the Mac's separate direct control connection.
 
 The currently active audio quality is a report from the dongle, not a promise of source or headphone capability. To reach 96 kHz, the Mac's USB output format and the headphones' Hi-Res priority setting must also allow it.
 The Video and Music buttons now set both the dongle mode and Mac USB output rate (48 and 96 kHz respectively), then read back both. The USB rate is also independently selectable. Sennheiser's HDB 630 manual says the headphone Audio Mode Priority must be set to High Resolution and the headphones restarted for 96 kHz wireless streaming. That setting's GAIA command is unverified and is not sent by this app. The UI reports the actual link format and tells the user when the prerequisite remains.

@@ -14,6 +14,9 @@ Response cmd = request cmd | 0x0100. Error cmd = request cmd | 0x0180.
 | Get Stream Sample Rate | 0x081A | - | big-endian uint32 Hz | HDB 630 returned `00 00 BB 80` (48 kHz) during streaming; notification `0x089A` uses the same value |
 | Get Charging | 0x0602 | - | [status] | 0=disconnected, 1=charging, 2=complete |
 | Get Battery | 0x0603 | - | [percent] | 0-100 |
+| Get Physical Device State | 0x0402 | - | [state, optional second-side state] | 1=in case, 2=off head, 3=on head; HDB 630 returned `03` while worn; notification `0x0482` |
+
+Qualcomm vendor `0x001D` also exposes read-only statistics: `0x1800` enumerates category IDs and `0x1801` returns paginated statistic records. On this HDB 630, categories `0x0001` and `0x0100` returned 5 and 19 records respectively. Their units and meanings remain unverified; see [Signal Lab research data](07-signal-lab.md#research-only-statistics).
 
 ### Codec IDs
 
