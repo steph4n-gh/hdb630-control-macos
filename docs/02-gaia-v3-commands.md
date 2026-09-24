@@ -11,6 +11,7 @@ Response cmd = request cmd | 0x0100. Error cmd = request cmd | 0x0180.
 | Get Serial | 0x0003 | - | ASCII string | Vendor: Qualcomm (0x001D) |
 | Get Firmware | 0x1202 | - | [major, minor, patch] | e.g. `03 21 03` = 3.33.3 |
 | Get Codec | 0x0800 | - | [codec_id] | See codec table below |
+| Get Stream Sample Rate | 0x081A | - | big-endian uint32 Hz | HDB 630 returned `00 00 BB 80` (48 kHz) during streaming; notification `0x089A` uses the same value |
 | Get Charging | 0x0602 | - | [status] | 0=disconnected, 1=charging, 2=complete |
 | Get Battery | 0x0603 | - | [percent] | 0-100 |
 
@@ -193,4 +194,4 @@ We poll every 2 seconds while the popover is open.
 
 ### Mystery Notification
 
-Notification 0x089A appears occasionally with payloads like `0xAC44` (44100) — looks like sample rate. Not handled currently.
+Notification 0x089A reports the active headphone stream sample rate as a big-endian 32-bit integer (for example 44100 or 48000 Hz). The app displays it in Signal Lab.

@@ -2,6 +2,9 @@ import SwiftUI
 
 struct DongleView: View {
     @ObservedObject var dongle: DongleController
+    @EnvironmentObject private var outputSwitcher: AudioOutputSwitcher
+    @State private var applyingMode = false
+    @State private var formatError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -70,10 +73,42 @@ struct DongleView: View {
                     .disabled(dongle.busy)
                 }
 
-                CardSection("Transmission") {
+                CardSection("Listening Modes") {
                     HStack(spacing: 9) {
                         modeButton(.highQuality, icon: "waveform")
                         modeButton(.gaming, icon: "gamecontroller")
+                    }
+
+                    Text("Video favors low latency at 48 kHz. Music favors quality and sets the Mac’s USB output to 96 kHz.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 10) {
+                        detail("MAC → USB", outputSwitcher.dongleRate.map(rateLabel) ?? "—")
+                        detail("DONGLE → HEADPHONES", dongle.qualityDescription)
+                    }
+
+                    if !outputSwitcher.dongleRates.isEmpty {
+                        HStack {
+                            Text("Mac USB format")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Menu(outputSwitcher.dongleRate.map(rateLabel) ?? "Choose") {
+                                ForEach(outputSwitcher.dongleRates, id: \.self) { rate in
+                                    Button(rateLabel(rate)) { setRate(rate) }
+                                }
+                            }
+                            .disabled(applyingMode)
+                        }
+                    }
+
+                    if dongle.audioMode == .highQuality && dongle.sampleRate != 3 {
+                        Text("For a 96 kHz wireless link, the headphones also need Audio Mode Priority → High Resolution in Smart Control Plus, followed by a headphone restart. This app cannot yet verify that headphone setting. Check the live link format above.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     if dongle.audioMode == .broadcast {
@@ -113,10 +148,18 @@ struct DongleView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.orange)
             }
+            if let formatError {
+                Text(formatError)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .task { await dongle.refresh() }
+        .task {
+            outputSwitcher.refresh()
+            await dongle.refresh()
+        }
     }
 
     private func detail(_ title: String, _ value: String) -> some View {
@@ -136,14 +179,15 @@ struct DongleView: View {
     }
 
     private func modeButton(_ mode: DongleController.AudioMode, icon: String) -> some View {
-        let selected = dongle.audioMode == mode
+        let targetRate = mode == .gaming ? 48_000.0 : 96_000.0
+        let selected = dongle.audioMode == mode && outputSwitcher.dongleRate == targetRate
         return Button {
-            Task { await dongle.setAudioMode(mode) }
+            apply(mode)
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 13))
-                Text(mode == .gaming ? "Low latency" : "High quality")
+                Text(mode == .gaming ? "Video" : "Music")
                     .font(.system(size: 11, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -154,8 +198,42 @@ struct DongleView: View {
             .background(selected ? ControlStyle.accent : .white.opacity(0.07), in: .rect(cornerRadius: 10))
         }
         .buttonStyle(.plain)
-        .disabled(dongle.busy)
+        .disabled(dongle.busy || applyingMode || !outputSwitcher.dongleRates.contains(targetRate))
+        .help(mode == .gaming ? "Low latency · 48 kHz USB" : "High quality · 96 kHz USB")
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func apply(_ mode: DongleController.AudioMode) {
+        applyingMode = true
+        formatError = nil
+        Task {
+            defer { applyingMode = false }
+            guard await dongle.setAudioMode(mode) else { return }
+            do {
+                try await outputSwitcher.setDongleRate(mode == .gaming ? 48_000 : 96_000)
+            } catch {
+                formatError = error.localizedDescription
+            }
+            await dongle.refresh()
+        }
+    }
+
+    private func setRate(_ rate: Double) {
+        applyingMode = true
+        formatError = nil
+        Task {
+            defer { applyingMode = false }
+            do {
+                try await outputSwitcher.setDongleRate(rate)
+            } catch {
+                formatError = error.localizedDescription
+            }
+            await dongle.refresh()
+        }
+    }
+
+    private func rateLabel(_ rate: Double) -> String {
+        String(format: "%g kHz", rate / 1_000)
     }
 
     private var supportedCodecDescription: String {

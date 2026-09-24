@@ -9,6 +9,8 @@ final class AudioOutputSwitcher: ObservableObject {
     @Published private(set) var outputName = ""
     @Published private(set) var shortcutError: String?
     @Published private(set) var switching = false
+    @Published private(set) var dongleRate: Double?
+    @Published private(set) var dongleRates: [Double] = []
 
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
@@ -29,12 +31,16 @@ final class AudioOutputSwitcher: ObservableObject {
         case coreAudio(OSStatus)
         case speakersMissing
         case notConfirmed
+        case dongleMissing
+        case unsupportedRate(Double)
 
         var errorDescription: String? {
             switch self {
             case .coreAudio(let code): return "macOS audio error (\(code))."
             case .speakersMissing: return "MacBook speakers are unavailable."
             case .notConfirmed: return "macOS did not confirm the output change. Try again."
+            case .dongleMissing: return "BTD 700 USB audio output is unavailable."
+            case .unsupportedRate(let rate): return "BTD 700 does not offer \(Int(rate / 1_000)) kHz output on this Mac."
             }
         }
     }
@@ -94,6 +100,35 @@ final class AudioOutputSwitcher: ObservableObject {
         } catch {
             outputName = "Output unavailable"
         }
+        if let dongle = try? Self.dongleOutput() {
+            dongleRate = try? Self.double(dongle.id, kAudioDevicePropertyNominalSampleRate)
+            dongleRates = (try? Self.rates(dongle.id)) ?? []
+        } else {
+            dongleRate = nil
+            dongleRates = []
+        }
+    }
+
+    func setDongleRate(_ rate: Double) async throws {
+        guard let dongle = try Self.dongleOutput() else { throw SwitchError.dongleMissing }
+        guard try Self.rates(dongle.id).contains(where: { abs($0 - rate) < 1 }) else {
+            throw SwitchError.unsupportedRate(rate)
+        }
+        var value = rate
+        var property = Self.address(kAudioDevicePropertyNominalSampleRate)
+        let result = AudioObjectSetPropertyData(dongle.id, &property, 0, nil,
+                                                UInt32(MemoryLayout<Double>.size), &value)
+        guard result == noErr else { throw SwitchError.coreAudio(result) }
+        for _ in 0..<20 {
+            if let actual = try? Self.double(dongle.id, kAudioDevicePropertyNominalSampleRate),
+               abs(actual - rate) < 1 {
+                refresh()
+                return
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        refresh()
+        throw SwitchError.notConfirmed
     }
 
     func toggle() async {
@@ -158,6 +193,25 @@ final class AudioOutputSwitcher: ObservableObject {
         }
     }
 
+    private static func dongleOutput() throws -> Output? {
+        try outputs().first { $0.transport == kAudioDeviceTransportTypeUSB && $0.name == "BTD 700" }
+    }
+
+    private static func rates(_ device: AudioDeviceID) throws -> [Double] {
+        var property = address(kAudioDevicePropertyAvailableNominalSampleRates)
+        var size: UInt32 = 0
+        var result = AudioObjectGetPropertyDataSize(device, &property, 0, nil, &size)
+        guard result == noErr else { throw SwitchError.coreAudio(result) }
+        guard size > 0 else { return [] }
+        var ranges = [AudioValueRange](repeating: AudioValueRange(mMinimum: 0, mMaximum: 0),
+                                       count: Int(size) / MemoryLayout<AudioValueRange>.size)
+        result = ranges.withUnsafeMutableBytes {
+            AudioObjectGetPropertyData(device, &property, 0, nil, &size, $0.baseAddress!)
+        }
+        guard result == noErr else { throw SwitchError.coreAudio(result) }
+        return ranges.filter { $0.mMinimum == $0.mMaximum }.map(\.mMinimum)
+    }
+
     private static func address(_ selector: AudioObjectPropertySelector,
                                 scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
@@ -167,6 +221,15 @@ final class AudioOutputSwitcher: ObservableObject {
         var property = address(selector)
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
+        let result = AudioObjectGetPropertyData(object, &property, 0, nil, &size, &value)
+        guard result == noErr else { throw SwitchError.coreAudio(result) }
+        return value
+    }
+
+    private static func double(_ object: AudioObjectID, _ selector: AudioObjectPropertySelector) throws -> Double {
+        var property = address(selector)
+        var value: Double = 0
+        var size = UInt32(MemoryLayout<Double>.size)
         let result = AudioObjectGetPropertyData(object, &property, 0, nil, &size, &value)
         guard result == noErr else { throw SwitchError.coreAudio(result) }
         return value

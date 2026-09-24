@@ -9,6 +9,7 @@ final class HeadphoneController: ObservableObject {
 
     @Published var deviceInfo = DeviceInfo()
     @Published var batteryLevel: Int = 0
+    @Published var streamSampleRate: Int?
     @Published var controlError: String?
     @Published var ancEnabled: Bool = false
     @Published var ancState = ANCState()
@@ -58,6 +59,8 @@ final class HeadphoneController: ObservableObject {
                 guard let self else { return }
                 if state == .connected {
                     Task { await self.fetchAll() }
+                } else {
+                    self.streamSampleRate = nil
                 }
             }
             .store(in: &cancellables)
@@ -115,6 +118,7 @@ final class HeadphoneController: ObservableObject {
         async let t: Void = fetchTransparency()
         async let st: Void = fetchSidetone()
         async let c: Void = fetchCodec()
+        async let sr: Void = fetchStreamSampleRate()
         async let cs: Void = fetchChargingStatus()
         async let oh: Void = fetchOnHeadDetection()
         async let sp: Void = fetchSmartPause()
@@ -129,7 +133,7 @@ final class HeadphoneController: ObservableObject {
         async let am: Void = fetchAudioMode()
         async let ec: Void = fetchEQConfig()
         async let dl: Void = fetchDeviceList()
-        _ = await (s, b, a, m, t, st, c, cs, oh, sp, ac, cc, ap, aup, fw, eq, bb, cf, am, ec, dl)
+        _ = await (s, b, a, m, t, st, c, sr, cs, oh, sp, ac, cc, ap, aup, fw, eq, bb, cf, am, ec, dl)
     }
 
     // MARK: - Serial
@@ -290,6 +294,17 @@ final class HeadphoneController: ObservableObject {
         if resp.payload.count >= 1 {
             deviceInfo.codec = GAIAProtocol.codecNames[resp.payload[0]] ?? "Unknown (\(resp.payload[0]))"
         }
+    }
+
+    func fetchStreamSampleRate() async {
+        guard let resp = await send(vendor: .sennheiser, command: GAIAProtocol.cmdGetStreamSampleRate) else { return }
+        parseStreamSampleRate(resp.payload)
+    }
+
+    private func parseStreamSampleRate(_ data: Data) {
+        guard data.count >= 4 else { return }
+        let rate = data.prefix(4).reduce(0) { ($0 << 8) | Int($1) }
+        streamSampleRate = rate > 0 ? rate : nil
     }
 
     // MARK: - Charging Status
@@ -736,6 +751,8 @@ final class HeadphoneController: ObservableObject {
             if response.payload.count >= 1 {
                 deviceInfo.codec = GAIAProtocol.codecNames[response.payload[0]] ?? "Unknown"
             }
+        case GAIAProtocol.notifStreamSampleRate:
+            parseStreamSampleRate(response.payload)
         case GAIAProtocol.notifCharging:
             if response.payload.count >= 1 {
                 deviceInfo.chargingStatus = ChargingStatus(rawValue: Int(response.payload[0])) ?? .disconnected

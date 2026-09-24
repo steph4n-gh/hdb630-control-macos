@@ -308,12 +308,14 @@ final class DongleController: ObservableObject {
                 sampleRate = quality[1]
             }
             errorMessage = nil
+        } catch is CancellationError {
+            // A newer device event superseded this refresh.
         } catch {
             if available { errorMessage = error.localizedDescription }
         }
     }
 
-    func setAudioMode(_ mode: AudioMode) async {
+    @discardableResult func setAudioMode(_ mode: AudioMode) async -> Bool {
         busy = true
         defer { busy = false }
         do {
@@ -322,8 +324,13 @@ final class DongleController: ObservableObject {
             await refresh()
             if audioMode != mode {
                 errorMessage = "The dongle did not switch to \(mode.title)."
+                return false
             }
-        } catch { errorMessage = error.localizedDescription }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     func setCodec(_ codec: Codec) async {

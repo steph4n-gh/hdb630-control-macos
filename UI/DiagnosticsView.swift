@@ -265,6 +265,7 @@ struct DiagnosticsView: View {
                 row("Battery", headsetConnected ? "\(controller.batteryLevel)%" : "—")
                 row("Charging", headsetConnected ? (controller.deviceInfo.chargingStatus.label.isEmpty ? "No" : controller.deviceInfo.chargingStatus.label) : "—")
                 row("Headphone codec", headsetConnected ? (controller.deviceInfo.codec.isEmpty ? "—" : controller.deviceInfo.codec) : "—")
+                row("Headphone stream", headsetConnected ? controller.streamSampleRate.map { rateLabel(Double($0)) } ?? "No stream" : "—")
                 row("ANC", headsetConnected ? (controller.ancEnabled ? "On" : "Off") : "—")
                 row("Wind reduction", headsetConnected ? windLabel : "—")
                 row("Adaptive ANC", headsetConnected ? (controller.ancState.adaptive ? "On" : "Off") : "—")

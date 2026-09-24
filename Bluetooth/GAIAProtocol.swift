@@ -56,6 +56,7 @@ enum GAIAProtocol {
     static let cmdGetBattery: UInt16 = 0x0603
 
     static let cmdGetCodec: UInt16 = 0x0800          // response: 0=SBC,1=AAC,2=aptX,5=aptX-HD,8=aptX-Adaptive,10=LC3
+    static let cmdGetStreamSampleRate: UInt16 = 0x081A // response: uint32 big-endian Hz; 0=no stream
     static let cmdSetAudioMode: UInt16 = 0x0803     // payload=[0x00, mode(0-5)]
     static let cmdGetAudioMode: UInt16 = 0x0804
     static let cmdSetSidetone: UInt16 = 0x0805       // payload=[level 0-4] (0=off, 1-4=levels)
@@ -122,6 +123,7 @@ enum GAIAProtocol {
     static let respSetAudioMode: UInt16 = 0x0903
     static let respAudioMode: UInt16 = 0x0904
     static let notifCodec: UInt16 = 0x0880
+    static let notifStreamSampleRate: UInt16 = 0x089A
     static let respCodec: UInt16 = 0x0900
     static let notifCharging: UInt16 = 0x0682
     static let notifEQ: UInt16 = 0x1082

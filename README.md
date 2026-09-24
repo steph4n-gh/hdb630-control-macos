@@ -119,7 +119,8 @@ docs/                          -- Protocol docs and RE guide
 
 **BTD 700**
 - Live connection state, firmware, active codec, and audio quality
-- High Quality / Gaming mode switching
+- Video / Music modes set both dongle transmission and Mac USB output to 48 / 96 kHz, with readback of the actual formats
+- Manual Mac USB sample-rate selection (44.1, 48, or 96 kHz when offered by the dongle)
 - Reconnect and disconnect controls
 - Codec choices when the connected headphones expose more than one option, with rejection errors shown if the dongle declines a request
 
@@ -136,6 +137,8 @@ The app refreshes headset state after discrete writes and reports rejected comma
 - Multipoint is intentionally view-only, to not cut own connection
 - Custom EQ presets created in the mobile app show as "Custom" -- headphones only store raw band gains, preset names live in the phone app's local storage
 - The dongle reports only aptX Adaptive as available with the HDB 630 connected on our tested firmware (3.11.0). Other codec requests returned a rejection. The app displays that error instead of claiming the codec changed.
+- Wireless 96 kHz also requires Audio Mode Priority → High Resolution on the headphones and a headphone restart, per Sennheiser's HDB 630 manual. We have not verified a safe GAIA command for that setting, so the Mac app shows the real USB and wireless formats and explains this prerequisite instead of claiming Music mode has enabled it. Gaming/Video mode limits the link to 48 kHz.
+- Packet traces use private macOS unified debug logging. The app no longer writes an unbounded `/tmp/hdb630.log` file.
 - Firmware updates and Auracast broadcast configuration remain in Sennheiser Dongle Control.
 
 ## BTD 700 Dongle & Multipoint

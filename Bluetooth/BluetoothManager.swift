@@ -7,19 +7,12 @@ private let btLog = OSLog(subsystem: "com.hdb630.control", category: "bluetooth"
 
 private func BTLog(_ format: String, _ args: CVarArg...) {
     let msg = String(format: format, arguments: args)
-    os_log("%{public}s", log: btLog, type: .default, msg)
-    let line = "\(Date()) \(msg)\n"
-    if let data = line.data(using: .utf8) {
-        if FileManager.default.fileExists(atPath: "/tmp/hdb630.log") {
-            if let fh = FileHandle(forWritingAtPath: "/tmp/hdb630.log") {
-                fh.seekToEndOfFile()
-                fh.write(data)
-                fh.closeFile()
-            }
-        } else {
-            FileManager.default.createFile(atPath: "/tmp/hdb630.log", contents: data)
-        }
-    }
+    os_log("%{private}s", log: btLog, type: .default, msg)
+}
+
+private func BTTrace(_ format: String, _ args: CVarArg...) {
+    let msg = String(format: format, arguments: args)
+    os_log("%{private}s", log: btLog, type: .debug, msg)
 }
 
 // MARK: - Bluetooth Manager
@@ -282,7 +275,7 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
             }
 
             var bytes = [UInt8](packet)
-            BTLog("[BT] TX %d bytes: %@", bytes.count, bytes.map { String(format: "%02X", $0) }.joined(separator: " "))
+            BTTrace("[BT] TX %d bytes: %@", bytes.count, bytes.map { String(format: "%02X", $0) }.joined(separator: " "))
             let result = channel.writeSync(&bytes, length: UInt16(bytes.count))
             if result != kIOReturnSuccess {
                 queue.async { [weak self] in
@@ -312,7 +305,7 @@ extension BluetoothManager: IOBluetoothRFCOMMChannelDelegate {
         length dataLength: Int
     ) {
         let newData = Data(bytes: dataPointer, count: dataLength)
-        BTLog("[BT] RX %d bytes: %@", dataLength, newData.map { String(format: "%02X", $0) }.joined(separator: " "))
+        BTTrace("[BT] RX %d bytes: %@", dataLength, newData.map { String(format: "%02X", $0) }.joined(separator: " "))
         queue.async { [weak self] in
             self?.handleReceivedData(newData)
         }
@@ -365,7 +358,7 @@ extension BluetoothManager: IOBluetoothRFCOMMChannelDelegate {
 
             receiveBuffer = Data(receiveBuffer.dropFirst(consumed))
 
-            BTLog("[BT] GAIA vendor=0x%04X cmd=0x%04X payload=%d bytes",
+            BTTrace("[BT] GAIA vendor=0x%04X cmd=0x%04X payload=%d bytes",
                   response.vendorId, response.commandId, response.payload.count)
 
             let key = GAIAProtocol.callbackKey(vendor: response.vendorId, responseCmd: response.commandId)

@@ -210,7 +210,7 @@ private struct ControlRootView: View {
     @State private var showAppSettings = false
 
     private var contentHeight: CGFloat {
-        if selectedTab == 1 { return dongle.available ? 375 : 150 }
+        if selectedTab == 1 { return dongle.available ? 540 : 150 }
         return bluetooth.state == .connected ? 610 : 225
     }
 
