@@ -46,6 +46,8 @@ Response cmd = request cmd | 0x0100. Error cmd = request cmd | 0x0180.
 | Adaptive | 3 | 0=off, 1=on |
 
 The 6-byte GET response always returns all 3 modes in order: `[01, s1, 02, s2, 03, s3]`.
+Sennheiser's [HDB 630 manual](https://cdn.sennheiser-hearing.com/product-documents/product-downloads/hdb-630/Instruction%20manual%20HDB%20630/Instruction_manual_HDB_630.pdf) describes Off, Auto, and Max as **wind-noise reduction**, separate from overall ANC intensity. The 0/1/2 wire mapping is corroborated by device write/readback and [m4-companion's GAIA implementation](https://github.com/Zhengyang-Liu/m4-companion/blob/main/Sources/MomentumCore/MomentumControls.swift); it is not an objective measurement of acoustic effect. Adaptive ANC can change cancellation during a comparison, and a high manual transparency level intentionally passes through outside sound.
+The HDB 630 manual documents Adaptive ANC and Wind Noise Reduction, but does not define the acoustic effect of mode 2. The app exposes mode 2 only as an undocumented Comfort flag. Successful write/readback does not establish what it does to the sound; it is unrelated to the documented Comfort Call feature.
 
 ## Transparency
 

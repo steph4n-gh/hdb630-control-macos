@@ -13,9 +13,31 @@ enum ConnectionState: Equatable {
 // MARK: - Device Models
 
 struct ANCState: Equatable {
-    var antiWind: Int = 0    // 0=off, 1=on, 2=auto
+    var antiWind: Int = 0    // 0=off, 1=max, 2=auto
     var comfort: Bool = false
     var adaptive: Bool = false
+}
+
+enum NoiseControlMode: Int, CaseIterable {
+    case off
+    case adaptive
+    case custom
+
+    var title: String {
+        switch self {
+        case .off: "Off"
+        case .adaptive: "Adaptive"
+        case .custom: "Manual"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .off: "Noise cancellation is off."
+        case .adaptive: "The headphones adjust cancellation as background noise changes."
+        case .custom: "Use the manual ANC and transparency balance below."
+        }
+    }
 }
 
 struct DeviceInfo: Equatable {

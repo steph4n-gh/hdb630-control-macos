@@ -94,13 +94,13 @@ private struct ConnectedView: View {
             CardSection("Noise Control") {
                 ANCSection(controller: controller)
 
-                if controller.ancEnabled && !controller.ancState.adaptive {
+                if controller.noiseControlMode == .custom {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text("Transparent Hearing")
+                            Text("Manual balance")
                                 .font(.callout)
                             Spacer()
-                            Text("\(controller.transparencyLevel)%")
+                            Text("\(controller.transparencyLevel)% transparency")
                                 .font(.caption)
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
@@ -117,8 +117,21 @@ private struct ConnectedView: View {
                             in: 0...100,
                             step: 1
                         )
+                        HStack {
+                            Text("More cancellation")
+                            Spacer()
+                            Text("More outside sound")
+                        }
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        if controller.transparencyLevel >= 90 {
+                            Text("Transparency is near maximum. Move the slider toward cancellation to judge ANC strength.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(ControlStyle.accent.opacity(0.85))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
-                    .tooltip("Lets outside sounds through while ANC is active")
+                    .tooltip("Balance noise cancellation and outside sound in Manual mode")
                 }
             }
 
@@ -163,21 +176,24 @@ private struct ConnectedView: View {
 
 private struct ANCSection: View {
     @ObservedObject var controller: HeadphoneController
+    @State private var showExperimental = false
 
     var body: some View {
-        HStack {
-            Text("Noise cancelling")
-                .font(.system(size: 13, weight: .medium))
-            Spacer()
-            Toggle("", isOn: Binding(
-                get: { controller.ancEnabled },
-                set: { on in Task { await controller.setANCEnabled(on) } }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .labelsHidden()
+        Picker("Noise control", selection: Binding(
+            get: { controller.noiseControlMode },
+            set: { mode in Task { await controller.setNoiseControlMode(mode) } }
+        )) {
+            ForEach(NoiseControlMode.allCases, id: \.self) { mode in
+                Text(mode.title).tag(mode)
+            }
         }
-        .tooltip("Reduces ambient noise using built-in microphones")
+        .pickerStyle(.segmented)
+        .labelsHidden()
+
+        Text(controller.noiseControlMode.explanation)
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
 
         if controller.ancEnabled {
             VStack(alignment: .leading, spacing: 6) {
@@ -194,36 +210,45 @@ private struct ANCSection: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+                Text(windExplanation)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if controller.ancState.adaptive {
+                    Text("Adaptive ANC is also changing cancellation. Use Manual to compare wind settings consistently.")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ControlStyle.accent.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .tooltip("Reduces wind noise — Auto adjusts based on conditions")
 
-            HStack {
-                Text("Comfort")
-                    .font(.system(size: 13, weight: .medium))
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { controller.ancState.comfort },
-                    set: { on in Task { await controller.setComfort(on) } }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
+            DisclosureGroup("Undocumented ANC setting", isExpanded: $showExperimental) {
+                HStack {
+                    Text("Comfort flag")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { controller.ancState.comfort },
+                        set: { on in Task { await controller.setComfort(on) } }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                }
+                Text("The headphones expose this flag, but Sennheiser does not document its effect for HDB 630. We have verified the write and readback, not an acoustic result. This is separate from Comfort Call.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .tooltip("Reduced ANC strength for less ear pressure")
+            .font(.system(size: 11, weight: .medium))
+        }
+    }
 
-            HStack {
-                Text("Adaptive ANC")
-                    .font(.system(size: 13, weight: .medium))
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { controller.ancState.adaptive },
-                    set: { on in Task { await controller.setAdaptive(on) } }
-                ))
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
-            }
-            .tooltip("Automatically adjusts ANC level based on environment")
+    private var windExplanation: String {
+        switch controller.ancState.antiWind {
+        case 1: "Max prioritizes wind-noise reduction; it does not mean maximum overall cancellation."
+        case 2: "Auto adjusts wind-noise reduction as conditions change."
+        default: "Off disables wind-noise reduction. Regular ANC can still be active."
         }
     }
 }

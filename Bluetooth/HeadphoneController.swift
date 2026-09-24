@@ -165,6 +165,26 @@ final class HeadphoneController: ObservableObject {
         await fetchANCStatus()
     }
 
+    var noiseControlMode: NoiseControlMode {
+        guard ancEnabled else { return .off }
+        return ancState.adaptive ? .adaptive : .custom
+    }
+
+    func setNoiseControlMode(_ mode: NoiseControlMode) async {
+        switch mode {
+        case .off:
+            await setANCEnabled(false)
+        case .adaptive:
+            if !ancEnabled { await setANCEnabled(true) }
+            guard ancEnabled else { return }
+            await setAdaptive(true)
+        case .custom:
+            if !ancEnabled { await setANCEnabled(true) }
+            guard ancEnabled else { return }
+            await setAdaptive(false)
+        }
+    }
+
     // MARK: - ANC Mode (anti-wind, comfort, adaptive)
 
     func fetchANCMode() async {

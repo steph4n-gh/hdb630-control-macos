@@ -88,8 +88,9 @@ docs/                          -- Protocol docs and RE guide
 ## Features
 
 **Noise Control**
-- ANC modes: Adaptive, Comfort, Anti-Wind (off/max/auto)
-- Global ANC on/off
+- Noise-control modes: Off, Adaptive, Manual, with explanations in the app
+- Anti-Wind (off/max/auto); the app explains that Max wind filtering is not maximum overall ANC
+- Undocumented Comfort ANC flag under advanced controls, clearly marked as unverified acoustically
 - Transparency level (0-100)
 
 **Audio**
@@ -124,7 +125,7 @@ docs/                          -- Protocol docs and RE guide
 
 ## Live validation
 
-On an HDB 630 and BTD 700 (firmware 3.11.0), the following controls were changed, read back from the device, and restored: ANC on/off; Anti-Wind Off/Max/Auto; Comfort; Adaptive ANC; transparency; call and general settings; a graphic EQ band; each parametric EQ command type; crossfeed; dongle mode; and dongle disconnect/reconnect. The Anti-Wind values are `0=Off`, `1=Max`, `2=Auto`. Crossfeed uses `0=Low`, `1=High`, `2=Off`.
+On an HDB 630 and BTD 700 (firmware 3.11.0), the following controls were changed, read back from the device, and restored: ANC on/off; Anti-Wind Off/Max/Auto; the undocumented Comfort flag; Adaptive ANC; transparency; call and general settings; a graphic EQ band; each parametric EQ command type; crossfeed; dongle mode; and dongle disconnect/reconnect. This confirms protocol readback, not the audible effect of every setting. The Anti-Wind values are `0=Off`, `1=Max`, `2=Auto`. Crossfeed uses `0=Low`, `1=High`, `2=Off`.
 
 The app refreshes headset state after discrete writes and reports rejected commands. It also handles multi-stage PEQ notifications. The connected HDB 630 currently reports only aptX Adaptive as a dongle codec option, so codec switching across different headphones remains unverified. Firmware updates and Auracast broadcast configuration still use Sennheiser Dongle Control.
 

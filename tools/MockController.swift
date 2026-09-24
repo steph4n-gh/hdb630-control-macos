@@ -31,6 +31,10 @@ final class HeadphoneController: ObservableObject {
     @Published var controlError: String?
     @Published var ancEnabled: Bool = true
     @Published var ancState = ANCState(antiWind: 2, comfort: false, adaptive: false)
+    var noiseControlMode: NoiseControlMode {
+        guard ancEnabled else { return .off }
+        return ancState.adaptive ? .adaptive : .custom
+    }
     @Published var transparencyLevel: Int = 45
     @Published var sidetoneLevel: Int = 2
     @Published var autoPauseEnabled: Bool = true
@@ -63,6 +67,7 @@ final class HeadphoneController: ObservableObject {
 
     // No-op stubs for methods called by views
     func setANCEnabled(_ on: Bool) async {}
+    func setNoiseControlMode(_ mode: NoiseControlMode) async {}
     func setAntiWind(_ val: Int) async {}
     func setComfort(_ on: Bool) async {}
     func setAdaptive(_ on: Bool) async {}
