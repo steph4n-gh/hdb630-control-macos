@@ -308,7 +308,7 @@ struct SettingsView: View {
             HStack {
                 Spacer()
                 Button("Disconnect") {
-                    bluetooth.disconnect()
+                    bluetooth.disconnect(userInitiated: true)
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.small)

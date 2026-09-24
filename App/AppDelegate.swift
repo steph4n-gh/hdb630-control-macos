@@ -11,8 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     let outputSwitcher = AudioOutputSwitcher()
     private var controller: HeadphoneController!
     private var cancellables = Set<AnyCancellable>()
-    private var didAutoConnect = false
+    private var didInitialConnect = false
     private var pollTimer: Timer?
+    private var reconnectTimer: Timer?
+    private var wakeObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller = HeadphoneController(bluetooth: bluetooth)
@@ -53,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
             .store(in: &cancellables)
 
-        // Set device name + auto-connect on launch
+        // Set device name and restore the control channel when macOS reconnects the headphones.
         bluetooth.$state
             .receive(on: RunLoop.main)
             .sink { [weak self] state in
@@ -62,27 +64,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 if state == .connected {
                     let name = self.bluetooth.pairedDevices.first?.name ?? "HDB 630"
                     self.controller.deviceInfo.name = name
-                } else if state == .disconnected && !self.didAutoConnect && !self.bluetooth.pairedDevices.isEmpty {
-                    self.didAutoConnect = true
-                    if let hdb = self.bluetooth.pairedDevices.first(where: {
-                        ($0.name ?? "").localizedCaseInsensitiveContains("HDB") ||
-                        ($0.name ?? "").localizedCaseInsensitiveContains("630")
-                    }), hdb.isConnected() {
-                        self.bluetooth.connect(to: hdb)
-                    }
+                } else if state == .disconnected && !self.didInitialConnect && !self.bluetooth.pairedDevices.isEmpty {
+                    self.didInitialConnect = true
+                    self.recoverHeadphones()
                 }
             }
             .store(in: &cancellables)
 
         bluetooth.scanForDevices()
+        reconnectTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.recoverHeadphones() }
+        }
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                guard let self else { return }
+                if self.bluetooth.state == .connected && !self.bluetooth.pairedDevices.contains(where: { $0.isConnected() }) {
+                    self.bluetooth.disconnect()
+                }
+                self.recoverHeadphones()
+                await self.dongle.recoverAfterWake()
+                self.outputSwitcher.refresh()
+            }
+        }
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.bluetooth.disconnect()
+            MainActor.assumeIsolated {
+                self?.reconnectTimer?.invalidate()
+                if let wakeObserver = self?.wakeObserver {
+                    NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+                }
+                self?.bluetooth.disconnect()
+            }
         }
 
+    }
+
+    private func recoverHeadphones() {
+        guard !bluetooth.userDisconnected else { return }
+        switch bluetooth.state {
+        case .connected, .connecting, .scanning: return
+        default: break
+        }
+        if bluetooth.pairedDevices.isEmpty {
+            bluetooth.scanForDevices()
+        } else if let device = bluetooth.pairedDevices.first(where: { $0.isConnected() }) {
+            bluetooth.connect(to: device)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

@@ -119,15 +119,36 @@ final class DongleController: ObservableObject {
         reportBuffer.initialize(repeating: 0, count: 64)
         let matching = [kIOHIDVendorIDKey: 0x3542, kIOHIDProductIDKey: 0x3001] as NSDictionary
         IOHIDManagerSetDeviceMatching(manager, matching)
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        IOHIDManagerRegisterDeviceMatchingCallback(manager, { context, _, _, _ in
+            guard let context else { return }
+            let owner = Unmanaged<DongleController>.fromOpaque(context).takeUnretainedValue()
+            MainActor.assumeIsolated {
+                let wasAvailable = owner.available
+                owner.connect()
+                if !wasAvailable && owner.available { Task { await owner.refresh() } }
+            }
+        }, context)
+        IOHIDManagerRegisterDeviceRemovalCallback(manager, { context, _, _, removed in
+            guard let context else { return }
+            let owner = Unmanaged<DongleController>.fromOpaque(context).takeUnretainedValue()
+            MainActor.assumeIsolated {
+                if let current = owner.device, CFEqual(current, removed) {
+                    owner.detach()
+                }
+            }
+        }, context)
+        IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         _ = IOHIDManagerOpen(manager, 0)
         connect()
+        Task { await refresh() }
     }
 
     deinit {
         if let device {
-            IOHIDDeviceUnscheduleFromRunLoop(device, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
             IOHIDDeviceClose(device, 0)
         }
+        IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
         IOHIDManagerClose(manager, 0)
         reportBuffer.deinitialize(count: 64)
         reportBuffer.deallocate()
@@ -136,6 +157,7 @@ final class DongleController: ObservableObject {
     private func connect() {
         guard device == nil, let devices = IOHIDManagerCopyDevices(manager) else { return }
         let count = CFSetGetCount(devices)
+        guard count > 0 else { return }
         let values = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: count)
         defer { values.deallocate() }
         CFSetGetValues(devices, values)
@@ -150,7 +172,6 @@ final class DongleController: ObservableObject {
             guard IOHIDDeviceOpen(candidate, 0) == kIOReturnSuccess else { continue }
 
             device = candidate
-            IOHIDDeviceScheduleWithRunLoop(candidate, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
             IOHIDDeviceRegisterInputReportCallback(candidate, reportBuffer, 64, { context, _, _, _, _, report, length in
                 guard let context else { return }
                 let bytes = Array(UnsafeBufferPointer(start: report, count: min(length, 64)))
@@ -164,6 +185,43 @@ final class DongleController: ObservableObject {
             return
         }
         available = false
+    }
+
+    private func detach() {
+        eventRefreshTask?.cancel()
+        eventRefreshTask = nil
+        if let pending {
+            self.pending = nil
+            pending.continuation.resume(throwing: DongleError.unavailable)
+        }
+        if let device { IOHIDDeviceClose(device, 0) }
+        device = nil
+        available = false
+        busy = false
+        firmware = ""
+        connectionState = 0
+        activeCodecMask = 0
+        supportedCodecMask = 0
+        bitDepth = 0
+        sampleRate = 0
+        errorMessage = nil
+    }
+
+    func recoverAfterWake() async {
+        if available {
+            await refresh()
+            if errorMessage == nil { return }
+        }
+        detach()
+        for attempt in 0..<3 {
+            connect()
+            if available {
+                await refresh()
+                if errorMessage == nil { return }
+                detach()
+            }
+            if attempt < 2 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+        }
     }
 
     private func receive(_ bytes: [UInt8]) {
@@ -188,11 +246,11 @@ final class DongleController: ObservableObject {
     }
 
     private func command(_ id: UInt8, payload: [UInt8] = []) async throws -> [UInt8] {
-        if device == nil { connect() }
-        guard let device else { throw DongleError.unavailable }
         while pending != nil {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
+        if device == nil { connect() }
+        guard let device, available else { throw DongleError.unavailable }
         return try await withCheckedThrowingContinuation { continuation in
             let requestID = UUID()
             pending = Pending(id: requestID, command: id, continuation: continuation)
@@ -251,7 +309,7 @@ final class DongleController: ObservableObject {
             }
             errorMessage = nil
         } catch {
-            errorMessage = error.localizedDescription
+            if available { errorMessage = error.localizedDescription }
         }
     }
 

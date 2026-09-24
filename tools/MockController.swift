@@ -13,7 +13,7 @@ final class BluetoothManager: NSObject, ObservableObject {
 
     func scanForDevices() {}
     func connect(to device: IOBluetoothDevice) {}
-    func disconnect() {}
+    func disconnect(userInitiated: Bool = false) {}
 }
 
 // MARK: - Mock HeadphoneController

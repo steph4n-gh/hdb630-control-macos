@@ -27,6 +27,7 @@ private func BTLog(_ format: String, _ args: CVarArg...) {
 final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     @Published var state: ConnectionState = .disconnected
     @Published var pairedDevices: [IOBluetoothDevice] = []
+    @Published private(set) var userDisconnected = false
     private var scanID = UUID()
 
     private var rfcommChannel: IOBluetoothRFCOMMChannel?
@@ -176,6 +177,12 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Connection
 
     func connect(to device: IOBluetoothDevice) {
+        userDisconnected = false
+        if let channel = rfcommChannel {
+            channel.setDelegate(nil)
+            channel.close()
+            rfcommChannel = nil
+        }
         state = .connecting
         receiveBuffer = Data()
 
@@ -198,6 +205,7 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     @objc func sdpQueryComplete(_ device: IOBluetoothDevice!, status: IOReturn) {
+        guard !userDisconnected, state == .connecting else { return }
         if status == kIOReturnSuccess, let channelID = findGAIAChannel(device) {
             BTLog("[BT] SDP query found GAIA on channel %d", channelID)
             openRFCOMM(device: device, channelID: channelID)
@@ -228,7 +236,8 @@ final class BluetoothManager: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    func disconnect() {
+    func disconnect(userInitiated: Bool = false) {
+        if userInitiated { userDisconnected = true }
         BTLog("[BT] Disconnecting...")
         if let channel = rfcommChannel {
             channel.setDelegate(nil)
@@ -311,12 +320,18 @@ extension BluetoothManager: IOBluetoothRFCOMMChannelDelegate {
 
     func rfcommChannelOpenComplete(_ rfcommChannel: IOBluetoothRFCOMMChannel!, status error: IOReturn) {
         BTLog("[BT] rfcommChannelOpenComplete — status: %d (0=success)", error)
-        if error == kIOReturnSuccess {
-            BTLog("[BT] RFCOMM channel opened, connected")
-            DispatchQueue.main.async { self.state = .connected }
-        } else {
-            BTLog("[BT] ERROR: RFCOMM channel open failed: %d", error)
-            DispatchQueue.main.async { self.state = .error("RFCOMM channel open failed: \(error)") }
+        DispatchQueue.main.async {
+            guard !self.userDisconnected, self.rfcommChannel === rfcommChannel else { return }
+            if error == kIOReturnSuccess {
+                BTLog("[BT] RFCOMM channel opened, connected")
+                self.state = .connected
+            } else {
+                BTLog("[BT] ERROR: RFCOMM channel open failed: %d", error)
+                rfcommChannel.setDelegate(nil)
+                rfcommChannel.close()
+                self.rfcommChannel = nil
+                self.state = .error("RFCOMM channel open failed: \(error)")
+            }
         }
     }
 

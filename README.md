@@ -39,9 +39,11 @@ xcodegen && open HDB630Control.xcodeproj
 
 Build and run. The app appears as a headphones icon in the menu bar.
 
-For everyday use, copy `HDB630Control.app` to `/Applications` or `~/Applications` and launch that copy. Click the gear beside the Headphones and BTD 700 tabs, then enable **Launch at login**. The setting uses macOS's native login-item service and is available even when neither device is connected. If macOS requires approval, the app shows a link to Login Items. Replace the installed app with each new build so automatic launch uses the latest version.
+For everyday use, run `./tools/install-local.sh`. It builds, signs, and installs the app in `~/Applications`, then launches it. Run it again after pulling changes. Click the gear beside the Headphones and BTD 700 tabs, then enable **Launch at login**. The setting uses macOS's native login-item service and is available even when neither device is connected. If macOS requires approval, the app shows a link to Login Items.
 
 The **Headphones** tab requires pairing the HDB 630 directly to the Mac in System Settings > Bluetooth. This control connection can coexist with BTD 700 audio, but it occupies the headphones' second multipoint slot. The **BTD 700** tab works whenever the dongle is plugged into the Mac, even if the headphones are not paired to the Mac.
+
+The app reconnects to a paired HDB 630 when its Mac Bluetooth connection returns, checks again after wake, and detects BTD 700 USB removal and insertion. Choosing **Disconnect** in the Headphones tab pauses automatic reconnection until you connect again or restart the app. Audio through the dongle does not depend on the Mac Bluetooth control connection.
 
 If the headphones are already connected to both the dongle and a phone, disconnect the phone before pairing the Mac. Pairing a third active Bluetooth device may displace the dongle and interrupt audio. Once the Mac is connected, the app can open its control channel without taking another slot.
 

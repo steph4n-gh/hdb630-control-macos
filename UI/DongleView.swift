@@ -35,7 +35,7 @@ struct DongleView: View {
 
             if !dongle.available {
                 CardSection("Connection") {
-                    Label("Plug in your BTD 700, then refresh.", systemImage: "cable.connector")
+                    Label("Plug in your BTD 700. It will connect automatically.", systemImage: "cable.connector")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }

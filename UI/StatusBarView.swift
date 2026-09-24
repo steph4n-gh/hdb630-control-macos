@@ -146,7 +146,7 @@ private struct ConnectedView: View {
                 .foregroundStyle(.secondary)
                 Spacer()
                 Button("Disconnect") {
-                    bluetooth.disconnect()
+                    bluetooth.disconnect(userInitiated: true)
                 }
                 .buttonStyle(.borderless)
                 .controlSize(.small)
@@ -734,7 +734,7 @@ struct QuitButton: View {
 
     var body: some View {
         Button("Quit") {
-            bluetooth.disconnect()
+            bluetooth.disconnect(userInitiated: true)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 NSApp.terminate(nil)
             }
