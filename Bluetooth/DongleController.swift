@@ -46,6 +46,7 @@ final class DongleController: ObservableObject {
 
     @Published private(set) var available = false
     @Published private(set) var busy = false
+    private var activeOperations = 0
     @Published private(set) var errorMessage: String?
     @Published private(set) var firmware = ""
     @Published private(set) var connectionState: UInt8 = 0
@@ -197,7 +198,6 @@ final class DongleController: ObservableObject {
         if let device { IOHIDDeviceClose(device, 0) }
         device = nil
         available = false
-        busy = false
         firmware = ""
         connectionState = 0
         activeCodecMask = 0
@@ -281,9 +281,8 @@ final class DongleController: ObservableObject {
     func refresh() async {
         if device == nil { connect() }
         guard available else { return }
-        let wasBusy = busy
-        busy = true
-        defer { busy = wasBusy }
+        beginOperation()
+        defer { endOperation() }
         do {
             let version = try await command(0x12)
             if version.count >= 3 { firmware = "\(version[0]).\(version[1]).\(version[2])" }
@@ -316,8 +315,8 @@ final class DongleController: ObservableObject {
     }
 
     @discardableResult func setAudioMode(_ mode: AudioMode) async -> Bool {
-        busy = true
-        defer { busy = false }
+        beginOperation()
+        defer { endOperation() }
         do {
             let response = try await command(0x02, payload: [mode.rawValue, transport])
             try checkAck(response)
@@ -334,8 +333,8 @@ final class DongleController: ObservableObject {
     }
 
     func setCodec(_ codec: Codec) async {
-        busy = true
-        defer { busy = false }
+        beginOperation()
+        defer { endOperation() }
         do {
             let response = try await command(0x04, payload: [UInt8(codec.rawValue & 0xFF), UInt8(codec.rawValue >> 8)])
             try checkAck(response)
@@ -344,8 +343,8 @@ final class DongleController: ObservableObject {
     }
 
     func setConnected(_ connected: Bool) async {
-        busy = true
-        defer { busy = false }
+        beginOperation()
+        defer { endOperation() }
         do {
             let response = try await command(0x14, payload: [connected ? 1 : 0])
             try checkAck(response)
@@ -362,5 +361,15 @@ final class DongleController: ObservableObject {
     private func checkAck(_ response: [UInt8]) throws {
         guard let status = response.first else { throw DongleError.malformedResponse }
         guard status == 0 else { throw DongleError.rejected(status) }
+    }
+
+    private func beginOperation() {
+        activeOperations += 1
+        busy = true
+    }
+
+    private func endOperation() {
+        activeOperations -= 1
+        busy = activeOperations > 0
     }
 }
