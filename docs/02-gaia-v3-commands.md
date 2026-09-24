@@ -16,7 +16,7 @@ Response cmd = request cmd | 0x0100. Error cmd = request cmd | 0x0180.
 | Get Battery | 0x0603 | - | [percent] | 0-100 |
 | Get Physical Device State | 0x0402 | - | [state, optional second-side state] | 1=in case, 2=off head, 3=on head; HDB 630 returned `03` while worn; notification `0x0482` |
 
-Qualcomm vendor `0x001D` also exposes read-only statistics: `0x1800` enumerates category IDs and `0x1801` returns paginated statistic records. On this HDB 630, categories `0x0001` and `0x0100` returned 5 and 19 records respectively. Their units and meanings remain unverified; see [Signal Lab research data](07-signal-lab.md#research-only-statistics).
+Qualcomm vendor `0x001D` also exposes read-only statistics: `0x1800` enumerates category IDs and `0x1801` returns paginated statistic records. On this HDB 630, categories `0x0001` and `0x0100` returned 5 and 19 records respectively. The five streaming fields are mapped from Qualcomm client source; several of the 19 vendor counters are mapped by controlled experiments. See [the complete statistics investigation](08-statistics.md) for the ID table, units and remaining unknowns.
 
 ### Codec IDs
 

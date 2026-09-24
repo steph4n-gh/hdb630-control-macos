@@ -107,10 +107,12 @@ struct DiagnosticsView: View {
                     headsetCard
                 }
 
+                streamingCard
+                usageCard
                 sensorCard
 
                 HStack {
-                    Text("Mac metrics: 2 s · device refresh: 10 s / events")
+                    Text("Mac: 2 s · device / stream: 10 s · usage: 60 s")
                     Spacer()
                     if let sampledAt {
                         Text("Last sample \(sampledAt.formatted(date: .omitted, time: .standard))")
@@ -129,14 +131,18 @@ struct DiagnosticsView: View {
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         }
         .preferredColorScheme(.dark)
-        .task {
+        .task(id: headsetConnected) {
             var cycle = 0
             while !Task.isCancelled {
                 sample()
                 if cycle % 5 == 0 {
-                    if headsetConnected { await controller.pollState() }
+                    if headsetConnected {
+                        await controller.pollState()
+                        await controller.fetchStreamingStatistics()
+                    }
                     if dongle.available && !dongle.busy { await dongle.refresh() }
                 }
+                if cycle % 30 == 0, headsetConnected { await controller.fetchUsageStatistics() }
                 cycle += 1
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
@@ -300,6 +306,82 @@ struct DiagnosticsView: View {
         }
     }
 
+    private var streamingCard: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionLabel("HEADPHONE STREAMING STATISTICS")
+                HStack(alignment: .top, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        row("Primary RSSI", controller.streamingStatistics?.primaryRSSI.map(String.init) ?? "—")
+                        row("Primary link quality", controller.streamingStatistics?.primaryLinkQuality.map {
+                            String(format: "%.2f%%", $0)
+                        } ?? "—")
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        row("Streaming codec", controller.streamingStatistics?.codec ?? "—")
+                        row("Lossless flag", controller.streamingStatistics?.lossless.map { $0 ? "Enabled" : "Disabled" } ?? "—")
+                        row("Bitrate", controller.streamingStatistics?.bitrate.map {
+                            String(format: "%.1f kbps", Double($0) / 1000)
+                        } ?? (controller.streamingStatistics == nil ? "—" : "Not reported"))
+                    }
+                }
+                Text("Read from the headphones using Qualcomm’s statistics schema. “Primary” does not identify the peer in a multipoint connection. Link quality is a normalized device score, not a measured packet-delivery percentage. An empty bitrate field means unavailable.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var usageCard: some View {
+        panel {
+            VStack(alignment: .leading, spacing: 14) {
+                sectionLabel("ACCUMULATED USAGE  /  DEVICE COUNTERS")
+                HStack(alignment: .top, spacing: 28) {
+                    VStack(spacing: 10) {
+                        row("Powered-on time", usageDuration(0x02))
+                        row("Playback starts", usageValue(0x03))
+                        row("Playback time", usageDuration(0x04))
+                        row("Noise-control activations", usageValue(0x08))
+                        row("Noise-control time", usageDuration(0x09))
+                    }
+                    VStack(spacing: 10) {
+                        row("Charging sessions", usageValue(0x0A))
+                        row("Charging time", usageDuration(0x0B))
+                        row("AAC playback", usageDuration(0x0F))
+                        row("aptX Adaptive playback", usageDuration(0x11))
+                    }
+                }
+                Text("Mappings observed in controlled tests on firmware 3.33.3. Counters update about once a minute; their reset conditions are not fully known. Charging sessions are cable connections, not battery wear cycles. Noise-control time includes Manual transparency.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup("All 19 vendor records · raw values") {
+                    VStack(spacing: 8) {
+                        ForEach(controller.usageStatistics) { record in
+                            row(String(format: "0100:%02X", record.id),
+                                "\(record.unsignedValue.map(String.init) ?? "—")   [\(record.hex)]"
+                                + (record.flags == 0 ? "" : String(format: " flags:%02X", record.flags)))
+                        }
+                    }
+                    .fontDesign(.monospaced)
+                    .padding(.top, 8)
+                }
+                .font(.system(size: 11))
+                .tint(ControlStyle.accent)
+            }
+        }
+    }
+
+    private func usageValue(_ id: UInt8) -> String {
+        controller.usageStatistics.first { $0.id == id }?.unsignedValue(length: 2).map(String.init) ?? "—"
+    }
+
+    private func usageDuration(_ id: UInt8) -> String {
+        guard let minutes = controller.usageStatistics.first(where: { $0.id == id })?.unsignedValue(length: 4) else { return "—" }
+        return "\(minutes / 60) h \(minutes % 60) min"
+    }
+
     private var supportedCodecs: String {
         guard dongle.available else { return "—" }
         let names = DongleController.Codec.allCases
@@ -340,7 +422,8 @@ struct DiagnosticsView: View {
     }
 
     private var bluetoothRate: Double? {
-        switch dongle.sampleRate {
+        guard dongle.available, dongle.connectionState >= 2 else { return nil }
+        return switch dongle.sampleRate {
         case 1: 44_100
         case 2: 48_000
         case 3: 96_000

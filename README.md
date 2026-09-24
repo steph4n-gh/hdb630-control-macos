@@ -6,6 +6,8 @@ This personal branch adds **Control + Option + S** (`⌃⌥S`) to switch media o
 
 Click the chart icon beside the Headphones and BTD 700 tabs to open **Signal Lab**. It shows the Mac-to-dongle USB audio format and timing, the dongle's Bluetooth codec, link format and transport, headphone wear state, and an RSSI history for the separate Mac-to-headphone control connection. See [the telemetry map](docs/07-signal-lab.md) for what each reading means and which raw sensors are unavailable.
 
+Signal Lab also decodes the headphone streaming statistics (primary RSSI, normalized link quality, codec, lossless flag and bitrate when reported), and shows experimentally mapped usage counters. All 19 vendor records are available as raw values. The [24-statistic investigation](docs/08-statistics.md) records the evidence and unresolved IDs; telemetry stays on your Mac.
+
 <p>
   <img src="screenshots/screenshot_personal_audio_switch.jpg" width="360" alt="Personal audio output switch and Control Option S shortcut">
   <img src="screenshots/screenshot_popover.png" width="260" alt="Headphone controls">

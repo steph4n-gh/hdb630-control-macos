@@ -1,5 +1,70 @@
 import Foundation
 
+// GAIA vendor 0x001D, statistics feature. See docs/08-statistics.md for evidence.
+struct GAIAStatistic: Identifiable {
+    let id: UInt8
+    let flags: UInt8
+    let bytes: [UInt8]
+
+    var unsignedValue: UInt32? {
+        guard flags == 0, (1...4).contains(bytes.count) else { return nil }
+        return bytes.reduce(0) { ($0 << 8) | UInt32($1) }
+    }
+
+    func unsignedValue(length: Int) -> UInt32? {
+        bytes.count == length ? unsignedValue : nil
+    }
+
+    var hex: String { bytes.map { String(format: "%02X", $0) }.joined(separator: " ") }
+}
+
+struct GAIAStatisticsPage {
+    let more: Bool
+    let records: [GAIAStatistic]
+
+    // Reject truncated records, wrong categories and non-progressing pagination.
+    init?(_ payload: Data, category: UInt16, after lastID: UInt8 = 0) {
+        let bytes = Array(payload)
+        guard bytes.count >= 3, bytes[0] <= 1,
+              UInt16(bytes[1]) << 8 | UInt16(bytes[2]) == category else { return nil }
+        var records: [GAIAStatistic] = []
+        var offset = 3
+        var previous = lastID
+        while offset < bytes.count {
+            guard offset + 3 <= bytes.count else { return nil }
+            let id = bytes[offset], flags = bytes[offset + 1], length = Int(bytes[offset + 2])
+            offset += 3
+            guard id > previous, offset + length <= bytes.count else { return nil }
+            records.append(GAIAStatistic(id: id, flags: flags, bytes: Array(bytes[offset..<(offset + length)])))
+            offset += length
+            previous = id
+        }
+        guard bytes[0] == 0 || (!records.isEmpty && previous < 255) else { return nil }
+        self.more = bytes[0] == 1
+        self.records = records
+    }
+}
+
+struct HeadphoneStreamingStatistics {
+    let records: [GAIAStatistic]
+    let sampledAt: Date
+
+    private func value(_ id: UInt8, length: Int) -> UInt32? {
+        records.first { $0.id == id }?.unsignedValue(length: length)
+    }
+
+    var codec: String? {
+        guard let value = value(1, length: 1) else { return nil }
+        // Statistics IDs differ from the Sennheiser 0x0800 codec enum.
+        return [1: "SBC", 2: "AAC", 3: "aptX", 4: "aptX HD", 5: "aptX Adaptive"][value]
+            ?? "Unknown (\(value))"
+    }
+    var lossless: Bool? { value(2, length: 1).map { $0 != 0 } }
+    var bitrate: UInt32? { value(3, length: 4) }
+    var primaryRSSI: Int? { value(4, length: 2).map { Int(Int16(bitPattern: UInt16($0))) } }
+    var primaryLinkQuality: Double? { value(5, length: 2).map { Double($0) / 65535 * 100 } }
+}
+
 // MARK: - Connection State
 
 enum ConnectionState: Equatable {

@@ -10,6 +10,10 @@ final class HeadphoneController: ObservableObject {
     @Published var deviceInfo = DeviceInfo()
     @Published var batteryLevel: Int = 0
     @Published var streamSampleRate: Int?
+    @Published private(set) var streamingStatistics: HeadphoneStreamingStatistics?
+    @Published private(set) var usageStatistics: [GAIAStatistic] = []
+    private var fetchingStatistics = false
+    private var statisticsGeneration = 0
     @Published var controlError: String?
     @Published var ancEnabled: Bool = false
     @Published var ancState = ANCState()
@@ -63,6 +67,9 @@ final class HeadphoneController: ObservableObject {
                 } else {
                     self.streamSampleRate = nil
                     self.physicalDeviceState = nil
+                    self.streamingStatistics = nil
+                    self.usageStatistics = []
+                    self.statisticsGeneration += 1
                 }
             }
             .store(in: &cancellables)
@@ -84,6 +91,49 @@ final class HeadphoneController: ObservableObject {
         async let cc: Void = fetchComfortCall()
         async let ap: Void = fetchAutoPowerOff()
         _ = await (b, eq, cf, st, aup, oh, ph, sp, ac, cc, ap)
+    }
+
+    // MARK: - Diagnostics Statistics
+
+    /// Read the five streaming statistics only while Signal Lab is visible.
+    func fetchStreamingStatistics() async {
+        guard !fetchingStatistics, bluetooth.state == .connected else { return }
+        fetchingStatistics = true
+        defer { fetchingStatistics = false }
+        let generation = statisticsGeneration
+        guard let response = await send(vendor: .qualcomm, command: 0x1801, payload: [0, 1, 0]),
+              let page = GAIAStatisticsPage(response.payload, category: 1), !page.more,
+              !Task.isCancelled, bluetooth.state == .connected, generation == statisticsGeneration else {
+            streamingStatistics = nil
+            return
+        }
+        streamingStatistics = HeadphoneStreamingStatistics(records: page.records, sampledAt: Date())
+    }
+
+    /// The cumulative counters change slowly; Signal Lab requests them once a minute.
+    func fetchUsageStatistics() async {
+        guard !fetchingStatistics, bluetooth.state == .connected else { return }
+        fetchingStatistics = true
+        defer { fetchingStatistics = false }
+        let generation = statisticsGeneration
+        var records: [GAIAStatistic] = []
+        var last: UInt8 = 0
+        for _ in 0..<32 {
+            guard !Task.isCancelled, bluetooth.state == .connected, generation == statisticsGeneration,
+                  let response = await send(vendor: .qualcomm, command: 0x1801, payload: [1, 0, last]),
+                  let page = GAIAStatisticsPage(response.payload, category: 256, after: last),
+                  !Task.isCancelled, bluetooth.state == .connected, generation == statisticsGeneration else {
+                usageStatistics = []
+                return
+            }
+            records += page.records
+            if !page.more {
+                usageStatistics = records
+                return
+            }
+            last = page.records.last!.id // A continuation page must advance, checked by the parser.
+        }
+        usageStatistics = []
     }
 
     // MARK: - Notification Registration
